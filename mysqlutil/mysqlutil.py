@@ -1,6 +1,8 @@
 #!/usr/bin/env python2
 # coding: utf-8
 
+import os
+
 import MySQLdb
 
 from pykit import mysqlconnpool
@@ -114,6 +116,37 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
                      ' LIMIT ' + str(limit))
 
     return sql_to_return
+
+
+def sql_dump_between_shards(shard_fields, dbinfo, table, sql_path, bin_path, start, end=None):
+
+    condition_between_shards = sql_condition_between_shards(
+        shard_fields, start, end)
+    condition = '(' + ') OR ('.join(condition_between_shards) + ')'
+
+    if len(sql_path) == 0:
+        rst_path = '{table}.sql'.format(table=table)
+    else:
+        rst_path = os.path.join(*sql_path)
+
+    if len(bin_path) == 0:
+        cmd = 'mysqldump'
+    else:
+        cmd = os.path.join(*bin_path)
+
+    return ('{cmd} --host={host} --port={port} --user={user} --password={password} {db} {table} ' +
+            '-w {cond} > {rst_path}').format(
+        cmd=quote(cmd, "'"),
+        host=quote(dbinfo.get('host', ''), "'"),
+        port=quote(str(dbinfo.get('port', '')), "'"),
+        user=quote(dbinfo.get('user', ''), "'"),
+        password=quote(dbinfo.get('passwd', ''), "'"),
+
+        db=quote(dbinfo.get('db', ''), "'"),
+        table=quote(table, "'"),
+        cond=quote(condition, "'"),
+        rst_path=quote(rst_path, "'"),
+    )
 
 
 def sql_condition_between_shards(shard_fields, start, end=None):

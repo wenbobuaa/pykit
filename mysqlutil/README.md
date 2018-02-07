@@ -14,6 +14,7 @@
   - [mysqlutil.gtidset.load](#mysqlutilgtidsetload)
   - [mysqlutil.scan_index](#mysqlutilscan_index)
   - [mysqlutil.sql_condition_between_shards](#mysqlutilsql_condition_between_shards)
+  - [mysqlutil.sql_dump_between_shards](#mysqlutilsql_dump_between_shards)
   - [mysqlutil.sql_scan_index](#mysqlutilsql_scan_index)
 - [Author](#author)
 - [Copyright and License](#copyright-and-license)
@@ -310,6 +311,64 @@ sql_condition_between_shards(
 
 **return**:
 a list of string.
+
+
+## mysqlutil.sql_dump_between_shards
+
+**syntax**:
+`mysqlutil.sql_dump_between_shards(shard_fields, dbinfo, table, sql_path, bin_path, start, end=None)`
+
+Generate mysql dump command for those rows between shard `start` and shard `end`: "[`start`, `end`)".
+If `end` is `None`, means that `start` is the last shard.
+
+```
+sql_dump_between_shards(['bucket_id', 'scope', 'key'],
+    {
+        'host': '127.0.0.1',
+        'user': 'root',
+        'passwd': 'password',
+        'port': 3306,
+        'db': 'mysql',
+    },
+    'key',
+    ['/user', 'bin', 'mysqldump'],
+    ['10', 'a'], ['15', 'd']
+)
+
+# "'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' 'mysql' 'key' -w "\
+# "'(`id` = \"10\" AND `service` >= \"a\") OR (`id` = \"15\" AND `service` < \"d\") OR "\
+# "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"
+```
+
+**argument**:
+
+-   `shard_fields`:
+    is table fields of which the shard consist. A list or tuple of string.
+-   `dbinfo`:
+    is the info of the database which dump data from. A dict like:
+    ```
+    {
+        'host': '127.0.0.1',
+        'user': 'root',
+        'password': 'password',
+        'port': 3306,
+        'db': 'mysql',
+    }
+    ```
+-   `table`:
+    is the name of the table which dump data from. A string.
+-   `sql_path`:
+    is the path which dump data to. A list or tuple of strings, like: `['/tmp', 'table.sql']`.
+-   `bin_path`:
+    id the path where `mysqldump` is. A list or tuple of string, like: `['/usr', 'bin', 'mysqldump']`.
+-   `start`:
+    is the beginning boundary of the condition range, a list or tuple of string.
+-   `end`:
+    is the ending boundary of the condition range, a list or tuple of string. If `end` is `None`,
+    then condtion generated has no ending boundary.
+
+**return**:
+a string.
 
 
 ## mysqlutil.sql_scan_index

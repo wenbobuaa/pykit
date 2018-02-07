@@ -7,6 +7,7 @@ from .mysqlutil import (
     IndexNotPairs,
     scan_index,
     sql_condition_between_shards,
+    sql_dump_between_shards,
     sql_scan_index,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "privileges",
     "scan_index",
     "sql_condition_between_shards",
+    "sql_dump_between_shards",
     "sql_scan_index",
 ]

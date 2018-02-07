@@ -291,6 +291,72 @@ class TestMysqlutil(unittest.TestCase):
 
             self.assertEqual(rst, rst_expected)
 
+    def test_sql_dump_between_shards(self):
+
+        dbinfo = {
+            'host': '127.0.0.1',
+            'user': 'root',
+            'passwd': 'password',
+            'port': 3306,
+            'db': 'mysql',
+        }
+
+        dbinfo_special = {
+            'host': '127.0.0.1',
+            'user': 'root"1',
+            'passwd': 'pass\'word',
+            'port': 3306,
+            'db': 'my\\sql',
+        }
+
+        table = 'key'
+        table_special = 'key"00"'
+
+        cases = (
+            ((['id', 'service'], dbinfo, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
+                ['10', 'a'], ['15', 'd']),
+                ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' " +
+                 "'mysql' 'key' -w '(`id` = \"10\" AND `service` >= \"a\") OR " +
+                 "(`id` = \"15\" AND `service` < \"d\") OR " +
+                 "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"),
+                'test normal'
+             ),
+
+            ((['id', 'service'], dbinfo, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
+                ['10', 'a']),
+                ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' " +
+                 "'mysql' 'key' -w '(`id` = \"10\" AND `service` >= \"a\") OR " +
+                 "(`id` > \"10\")' > '/tmp/key.sql'"),
+                'test no end shard'
+             ),
+
+            ((['id', 'service'], dbinfo, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
+                ['10', 'a"'], ['15', 'd"3"']),
+                ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' " +
+                 "'mysql' 'key' -w '(`id` = \"10\" AND `service` >= \"a\\\"\") OR " +
+                 "(`id` = \"15\" AND `service` < \"d\\\"3\\\"\") OR " +
+                 "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"),
+                'test special characters in shards'
+             ),
+
+            ((['id', 'service'], dbinfo_special, table_special, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
+                ['10', 'a'], ['15', 'd']),
+                ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root\"1' --password='pass\\\'word' " +
+                 "'my\\sql' 'key\"00\"' -w '(`id` = \"10\" AND `service` >= \"a\") OR " +
+                 "(`id` = \"15\" AND `service` < \"d\") OR " +
+                 "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"),
+                'test special characters in dbinfo'
+             ),
+        )
+
+        for args, rst_expected, msg in cases:
+            dd('msg: ', msg)
+            dd('expected: ', rst_expected)
+            rst = mysqlutil.sql_dump_between_shards(*args)
+            dd('rst     : ', rst)
+
+            self.assertEquals(rst_expected, rst)
+
 
 def docker_does_container_exist(name):
 
