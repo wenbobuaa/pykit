@@ -233,3 +233,42 @@ def quote(s, quote="`"):
 
 def _safe(s):
     return '"' + MySQLdb.escape_string(s) + '"'
+
+
+def get_sharding(conf):
+
+    result = {
+            "shard": [],
+            "num": [],
+            "all": 0,
+        }
+
+    db = conf['db']
+    table = conf['table']
+    shard_fileds = conf['shard_fields']
+    first_shard = conf['first_shard']
+    result['shard'].append(first_shard)
+
+    # args = [(db, table), result_fields, index_fields, start_index_values]
+    args = [(db, table), shard_fileds, shard_fileds, first_shard]
+    kwargs = {"left_open": False, "use_dict": False, "retry": 3}
+
+    conn = conf['conn']
+    connpool = mysqlconnpool.make(conn)
+    records = scan_index(connpool, *args, **kwargs)
+
+    number_per_shard, offset = conf['number_per_shard']
+
+    shardings = strutil.sharding(
+        records, number_per_shard, accuracy=offset, joiner=list)
+
+    sharding_generator = conf.get('sharding_generator', tuple)
+    for shard, count in shardings:
+
+        if shard is not None:
+            result['shard'].append(sharding_generator(shard))
+
+        result['num'].append(count)
+        result['all'] += int(count)
+
+    return result

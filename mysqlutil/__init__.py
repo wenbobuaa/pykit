@@ -5,6 +5,7 @@ from . import (
 from .mysqlutil import (
     ConnectionTypeError,
     IndexNotPairs,
+    get_sharding,
     scan_index,
     sql_condition_between_shards,
     sql_dump_between_shards,
@@ -17,6 +18,7 @@ from privilege import (
 
 __all__ = [
     "ConnectionTypeError",
+    "get_sharding",
     "gtidset",
     "IndexNotPairs",
     "privileges",

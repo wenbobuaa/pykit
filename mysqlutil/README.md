@@ -9,6 +9,7 @@
   - [mysqlutil.ConnectionTypeError](#mysqlutilconnectiontypeerror)
   - [mysqlutil.IndexNotPairs](#mysqlutilindexnotpairs)
 - [Methods](#methods)
+  - [mysqlutil.get_sharding](#mysqlutilget_sharding)
   - [mysqlutil.gtidset.compare](#mysqlutilgtidsetcompare)
   - [mysqlutil.gtidset.dump](#mysqlutilgtidsetdump)
   - [mysqlutil.gtidset.load](#mysqlutilgtidsetload)
@@ -53,6 +54,62 @@ A subclass of `Exception`, raise if length of `index_values` and `index_fields` 
 
 
 #   Methods
+
+
+## mysqlutil.get_sharding
+
+**syntax**:
+`mysqlutil.get_sharding(conf)`
+
+Scan a database table and generate sharding info according configurations in `conf`.
+Return sharding result as a dictionary like:
+```
+{
+    "shard": [(), (), ...],
+    "number":   [number, number, ...],
+    "all":  number,
+}
+```
+
+**argument**:
+
+-   `conf`:
+    is a dictionary which provide configuration for sharding. Fields like:
+
+    -   `db`: which database to sharding. A string.
+    -   `table`: which table to sharding. A string.
+    -   `conn`: database connect info:
+
+        ```
+        {
+            'host': '127.0.0.1',
+            'port': 3306,
+            'user': 'mysql',
+            'passwd': '123qwe',
+        }
+        ```
+
+    -   `shard_fields`: those index fields to sharding by, a list or tuple.
+    -   `first_shard`: first shard value in the table, use as the start condition to scan table. a
+        list or tuple.
+    -   `number_per_shard`: how many rows of data a shard can contain and its tolerance. a list or
+        tuple like: `[number, number]`.
+    -   `sharding_generator`: a function that valid sharding format use a `shard` as argument.
+        `tuple` by default.
+
+**return**:
+a dictionary of sharding result, like:
+```
+{
+    "shard": [(), (), ...],
+    "number":   [number, number, ...],
+    "all":  number,
+}
+```
+
+-   `shard`: sharding info, contain first row of every shard as a list.
+-   `number`: numbers of rows in every shard.
+-   `all`: number of rows of all shards.
 
 
 ##  mysqlutil.gtidset.compare
