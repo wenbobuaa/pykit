@@ -67,7 +67,7 @@ Return sharding result as a dictionary like:
 {
     "shard": [(), (), ...],
     "number":   [number, number, ...],
-    "all":  number,
+    "total":  number,
 }
 ```
 
@@ -93,9 +93,9 @@ Return sharding result as a dictionary like:
     -   `first_shard`: first shard value in the table, use as the start condition to scan table. a
         list or tuple.
     -   `number_per_shard`: how many rows of data a shard can contain and its tolerance. a list or
-        tuple like: `[number, number]`.
-    -   `sharding_generator`: a function that valid sharding format use a `shard` as argument.
-        `tuple` by default.
+        tuple like: `[number, tolerance]`.
+    -   `sharding_generator`: a function that formats a shard. It accepts one list of string
+        argument "shard". `tuple()` is the default `sharding_generator`.
 
 **return**:
 a dictionary of sharding result, like:
@@ -103,13 +103,13 @@ a dictionary of sharding result, like:
 {
     "shard": [(), (), ...],
     "number":   [number, number, ...],
-    "all":  number,
+    "total":  number,
 }
 ```
 
 -   `shard`: sharding info, contain first row of every shard as a list.
 -   `number`: numbers of rows in every shard.
--   `all`: number of rows of all shards.
+-   `total`: number of rows of all shards.
 
 
 ##  mysqlutil.gtidset.compare

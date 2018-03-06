@@ -17,7 +17,7 @@ class IndexNotPairs(Exception):
     pass
 
 
-class ShardNotPairs(Exception):
+class InvalidShardLength(Exception):
     pass
 
 
@@ -102,7 +102,7 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
             operator = ' >= '
 
         prefix = table_name + '.'
-        and_conditions = connect_condition(
+        and_conditions = concat_condition(
             index_pairs, operator, prefix=prefix)
 
         where_conditions = ' WHERE ' + and_conditions
@@ -155,19 +155,21 @@ def sql_condition_between_shards(shard_fields, start, end=None):
         if start >= end:
             return []
         if len(shard_fields) != len(end):
-            raise ShardNotPairs
+            raise InvalidShardLength(
+                    "the number of fields in 'end' and 'shard_fields' is not equal")
     else:
         end = []
 
     if len(shard_fields) != len(start):
-        raise ShardNotPairs
+        raise InvalidShardLength(
+                "the number of fields in 'start' and 'shard_fields' is not equal")
 
     same_fields = strutil.common_prefix(start, end, recursive=False)
     prefix_condition = ''
     prefix_len = len(same_fields)
     if prefix_len > 0:
         prefix_shards = zip(shard_fields[:prefix_len], start[:prefix_len])
-        prefix_condition = connect_condition(prefix_shards, ' = ')
+        prefix_condition = concat_condition(prefix_shards, ' = ')
         prefix_condition += " AND "
 
         shard_fields = shard_fields[prefix_len:]
@@ -175,7 +177,7 @@ def sql_condition_between_shards(shard_fields, start, end=None):
         end = end[prefix_len:]
 
     start_shards = zip(shard_fields, start)
-    start_condition_first = connect_condition(start_shards, ' >= ')
+    start_condition_first = concat_condition(start_shards, ' >= ')
     start_condition = generate_shards_condition(start_shards[:-1], ' > ')
     start_condition.insert(0, start_condition_first)
 
@@ -203,7 +205,7 @@ def generate_shards_condition(shards, operator):
     shards_to_connect = shards[:]
     while len(shards_to_connect) > 0:
 
-        and_condition = connect_condition(shards_to_connect, operator)
+        and_condition = concat_condition(shards_to_connect, operator)
         conditions.append(and_condition)
 
         shards_to_connect = shards_to_connect[:-1]
@@ -211,7 +213,7 @@ def generate_shards_condition(shards, operator):
     return conditions
 
 
-def connect_condition(shards, operator, prefix=''):
+def concat_condition(shards, operator, prefix=''):
 
     condition = []
 
@@ -240,7 +242,7 @@ def get_sharding(conf):
     result = {
             "shard": [],
             "num": [],
-            "all": 0,
+            "total": 0,
         }
 
     db = conf['db']
@@ -257,10 +259,10 @@ def get_sharding(conf):
     connpool = mysqlconnpool.make(conn)
     records = scan_index(connpool, *args, **kwargs)
 
-    number_per_shard, offset = conf['number_per_shard']
+    number_per_shard, tolerance = conf['number_per_shard']
 
     shardings = strutil.sharding(
-        records, number_per_shard, accuracy=offset, joiner=list)
+        records, number_per_shard, accuracy=tolerance, joiner=list)
 
     sharding_generator = conf.get('sharding_generator', tuple)
     for shard, count in shardings:
@@ -269,6 +271,6 @@ def get_sharding(conf):
             result['shard'].append(sharding_generator(shard))
 
         result['num'].append(count)
-        result['all'] += int(count)
+        result['total'] += int(count)
 
     return result

@@ -386,7 +386,7 @@ class TestMysqlutil(unittest.TestCase):
                 "sharding_generator": tuple,
             },
             {
-                'all': 32,
+                'total': 32,
                 'num': [10, 10, 10, 2],
                 'shard': [('common0', '', ''), ('common0', '127.0.0.3', '27'),
                     ('common2', '127.0.0.1'), ('common4', '127.0.0.1', '17')],
@@ -400,7 +400,7 @@ class TestMysqlutil(unittest.TestCase):
                 "sharding_generator": tuple,
             },
             {
-                'all': 22,
+                'total': 22,
                 'num': [10, 10, 2],
                 'shard': [('common0', '127.0.0.3', '27'),
                     ('common2', '127.0.0.1'), ('common4', '127.0.0.1', '17')],
@@ -414,7 +414,7 @@ class TestMysqlutil(unittest.TestCase):
                 "sharding_generator": sharding_generator,
             },
             {
-                'all': 32,
+                'total': 32,
                 'num': [10, 10, 10, 2],
                 'shard': [('common0', '', ''), ('common0', '127.0.0.3', '27'),
                     ('common2', '127.0.0.1', ''), ('common4', '127.0.0.1', '17')],
@@ -428,7 +428,7 @@ class TestMysqlutil(unittest.TestCase):
                 "sharding_generator": sharding_generator,
             },
             {
-                'all': 32,
+                'total': 32,
                 'num': [15, 15, 2],
                 'shard': [('common0', '', ''), ('common1', '127.0.0.1', '31'), ('common4', '', '')],
             },
@@ -440,7 +440,7 @@ class TestMysqlutil(unittest.TestCase):
                 "number_per_shard": (10, 1),
             },
             {
-                'all': 32,
+                'total': 32,
                 'num': [10, 10, 10, 2],
                 'shard': [('201706060600', '1'), ('201706060610',), ('201706060620',),
                     ('201706060630',)],
