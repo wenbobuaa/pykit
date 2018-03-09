@@ -92,8 +92,8 @@ Return sharding result as a dictionary like:
     -   `shard_fields`: those index fields to sharding by, a list or tuple.
     -   `first_shard`: first shard value in the table, use as the start condition to scan table. a
         list or tuple.
-    -   `number_per_shard`: how many rows of data a shard can contain and its tolerance. a list or
-        tuple like: `[number, tolerance]`.
+    -   `number_per_shard`: how many rows of data a shard can contain. a number.
+    -   `tolerance_of_shard`: the tolerance of one shard's capacity. a number.
     -   `sharding_generator`: a function that formats a shard. It accepts one list of string
         argument "shard". `tuple()` is the default `sharding_generator`.
 

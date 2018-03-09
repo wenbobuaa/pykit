@@ -158,7 +158,7 @@ def sql_condition_between_shards(shard_fields, start, end=None):
             raise InvalidShardLength(
                     "the number of fields in 'end' and 'shard_fields' is not equal")
     else:
-        end = []
+        end = start[:0]
 
     if len(shard_fields) != len(start):
         raise InvalidShardLength(
@@ -249,7 +249,6 @@ def get_sharding(conf):
     table = conf['table']
     shard_fileds = conf['shard_fields']
     first_shard = conf['first_shard']
-    result['shard'].append(first_shard)
 
     # args = [(db, table), result_fields, index_fields, start_index_values]
     args = [(db, table), shard_fileds, shard_fileds, first_shard]
@@ -259,7 +258,8 @@ def get_sharding(conf):
     connpool = mysqlconnpool.make(conn)
     records = scan_index(connpool, *args, **kwargs)
 
-    number_per_shard, tolerance = conf['number_per_shard']
+    number_per_shard = conf['number_per_shard']
+    tolerance = conf['tolerance_of_shard']
 
     shardings = strutil.sharding(
         records, number_per_shard, accuracy=tolerance, joiner=list)
@@ -269,6 +269,8 @@ def get_sharding(conf):
 
         if shard is not None:
             result['shard'].append(sharding_generator(shard))
+        else:
+            result['shard'].append(sharding_generator(first_shard))
 
         result['num'].append(count)
         result['total'] += int(count)

@@ -381,8 +381,9 @@ class TestMysqlutil(unittest.TestCase):
         cases = (
             ({
                 "shard_fields": ('service', 'ip', '_id'),
-                "first_shard": ('common0', '', ''),
-                "number_per_shard": (10, 1),
+                "first_shard": ['common0', '', ''],
+                "number_per_shard": 10,
+                "tolerance_of_shard": 1,
                 "sharding_generator": tuple,
             },
             {
@@ -395,8 +396,9 @@ class TestMysqlutil(unittest.TestCase):
 
             ({
                 "shard_fields": ('service', 'ip', '_id'),
-                "first_shard": ('common0', '127.0.0.3', '27'),
-                "number_per_shard": (10, 1),
+                "first_shard": ['common0', '127.0.0.3', '27'],
+                "number_per_shard": 10,
+                "tolerance_of_shard": 1,
                 "sharding_generator": tuple,
             },
             {
@@ -409,8 +411,9 @@ class TestMysqlutil(unittest.TestCase):
 
             ({
                 "shard_fields": ('service', 'ip', '_id'),
-                "first_shard": ('common0', '', ''),
-                "number_per_shard": (10, 1),
+                "first_shard": ['common0', '', ''],
+                "number_per_shard": 10,
+                "tolerance_of_shard": 1,
                 "sharding_generator": sharding_generator,
             },
             {
@@ -423,8 +426,9 @@ class TestMysqlutil(unittest.TestCase):
 
             ({
                 "shard_fields": ('service', 'ip', '_id'),
-                "first_shard": ('common0', '', ''),
-                "number_per_shard": (15, 2),
+                "first_shard": ['common0', '', ''],
+                "number_per_shard": 15,
+                "tolerance_of_shard": 2,
                 "sharding_generator": sharding_generator,
             },
             {
@@ -436,8 +440,9 @@ class TestMysqlutil(unittest.TestCase):
 
             ({
                 "shard_fields": ('time', '_id'),
-                "first_shard": ('201706060600', '1'),
-                "number_per_shard": (10, 1),
+                "first_shard": ['201706060600', '1'],
+                "number_per_shard": 10,
+                "tolerance_of_shard": 1,
             },
             {
                 'total': 32,
