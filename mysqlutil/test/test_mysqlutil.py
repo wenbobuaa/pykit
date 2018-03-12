@@ -234,8 +234,8 @@ class TestMysqlutil(unittest.TestCase):
 
             ((['id', 'service'], ['10', 'a'], ['15', 'd']),
                 ['`id` = "10" AND `service` >= "a"',
-                 '`id` = "15" AND `service` < "d"',
                  '`id` > "10" AND `id` < "15"',
+                 '`id` = "15" AND `service` < "d"',
                  ],
                 '2 shard fields normal'),
 
@@ -252,17 +252,17 @@ class TestMysqlutil(unittest.TestCase):
 
             ((['id', 'service', 'level'], ['10', 'a', 'a3'], ['10', 'd', 'b2']),
                 ['`id` = "10" AND `service` = "a" AND `level` >= "a3"',
-                 '`id` = "10" AND `service` = "d" AND `level` < "b2"',
                  '`id` = "10" AND `service` > "a" AND `service` < "d"',
+                 '`id` = "10" AND `service` = "d" AND `level` < "b2"',
                  ],
                 '3 shard fields, 1 same fields'),
 
             ((['id', 'service', 'level'], ['10', 'a', 'a3'], ['15', 'd', 'b2']),
                 ['`id` = "10" AND `service` = "a" AND `level` >= "a3"',
                  '`id` = "10" AND `service` > "a"',
-                 '`id` = "15" AND `service` = "d" AND `level` < "b2"',
-                 '`id` = "15" AND `service` < "d"',
                  '`id` > "10" AND `id` < "15"',
+                 '`id` = "15" AND `service` < "d"',
+                 '`id` = "15" AND `service` = "d" AND `level` < "b2"',
                  ],
                 '3 shard fields normal'),
 
@@ -277,9 +277,9 @@ class TestMysqlutil(unittest.TestCase):
             ((['id', 'service', 'level'], ['10', 'a"c', 'a"3"'], ['15', 'd\\b', 'b\'2']),
                 ['`id` = "10" AND `service` = "a\\\"c" AND `level` >= "a\\\"3\\\""',
                  '`id` = "10" AND `service` > "a\\\"c"',
-                 '`id` = "15" AND `service` = "d\\\\b" AND `level` < "b\\\'2"',
-                 '`id` = "15" AND `service` < "d\\\\b"',
                  '`id` > "10" AND `id` < "15"',
+                 '`id` = "15" AND `service` < "d\\\\b"',
+                 '`id` = "15" AND `service` = "d\\\\b" AND `level` < "b\\\'2"',
                  ],
                 'special characters'),
         )
@@ -295,7 +295,7 @@ class TestMysqlutil(unittest.TestCase):
 
     def test_sql_dump_between_shards(self):
 
-        dbinfo = {
+        conn = {
             'host': '127.0.0.1',
             'user': 'root',
             'passwd': 'password',
@@ -303,7 +303,7 @@ class TestMysqlutil(unittest.TestCase):
             'db': 'mysql',
         }
 
-        dbinfo_special = {
+        conn_special = {
             'host': '127.0.0.1',
             'user': 'root"1',
             'passwd': 'pass\'word',
@@ -315,38 +315,46 @@ class TestMysqlutil(unittest.TestCase):
         table_special = 'key"00"'
 
         cases = (
-            ((['id', 'service'], dbinfo, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
+            ((['id', 'service'], conn, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
                 ['10', 'a'], ['15', 'd']),
                 ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' " +
-                 "'mysql' 'key' -w '(`id` = \"10\" AND `service` >= \"a\") OR " +
-                 "(`id` = \"15\" AND `service` < \"d\") OR " +
-                 "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"),
+                 "'mysql' 'key' -w '" +
+                 "(`id` = \"10\" AND `service` >= \"a\") OR " +
+                 "(`id` > \"10\" AND `id` < \"15\") OR " +
+                 "(`id` = \"15\" AND `service` < \"d\")" +
+                 "' > '/tmp/key.sql'"),
                 'test normal'
              ),
 
-            ((['id', 'service'], dbinfo, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
+            ((['id', 'service'], conn, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
                 ['10', 'a']),
                 ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' " +
-                 "'mysql' 'key' -w '(`id` = \"10\" AND `service` >= \"a\") OR " +
-                 "(`id` > \"10\")' > '/tmp/key.sql'"),
+                 "'mysql' 'key' -w '" +
+                 "(`id` = \"10\" AND `service` >= \"a\") OR " +
+                 "(`id` > \"10\")" +
+                 "' > '/tmp/key.sql'"),
                 'test no end shard'
              ),
 
-            ((['id', 'service'], dbinfo, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
+            ((['id', 'service'], conn, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
                 ['10', 'a"'], ['15', 'd"3"']),
                 ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' " +
-                 "'mysql' 'key' -w '(`id` = \"10\" AND `service` >= \"a\\\"\") OR " +
-                 "(`id` = \"15\" AND `service` < \"d\\\"3\\\"\") OR " +
-                 "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"),
+                 "'mysql' 'key' -w '"
+                 "(`id` = \"10\" AND `service` >= \"a\\\"\") OR " +
+                 "(`id` > \"10\" AND `id` < \"15\") OR " +
+                 "(`id` = \"15\" AND `service` < \"d\\\"3\\\"\")" +
+                 "' > '/tmp/key.sql'"),
                 'test special characters in shards'
              ),
 
-            ((['id', 'service'], dbinfo_special, table_special, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
+            ((['id', 'service'], conn_special, table_special, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
                 ['10', 'a'], ['15', 'd']),
                 ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root\"1' --password='pass\\\'word' " +
-                 "'my\\sql' 'key\"00\"' -w '(`id` = \"10\" AND `service` >= \"a\") OR " +
-                 "(`id` = \"15\" AND `service` < \"d\") OR " +
-                 "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"),
+                 "'my\\sql' 'key\"00\"' -w '" +
+                 "(`id` = \"10\" AND `service` >= \"a\") OR " +
+                 "(`id` > \"10\" AND `id` < \"15\") OR " +
+                 "(`id` = \"15\" AND `service` < \"d\")" +
+                 "' > '/tmp/key.sql'"),
                 'test special characters in dbinfo'
              ),
         )

@@ -66,8 +66,8 @@ Return sharding result as a dictionary like:
 ```
 {
     "shard": [(), (), ...],
-    "number":   [number, number, ...],
-    "total":  number,
+    "number": [number, number, ...],
+    "total": number,
 }
 ```
 
@@ -90,7 +90,7 @@ Return sharding result as a dictionary like:
         ```
 
     -   `shard_fields`: those index fields to sharding by, a list or tuple.
-    -   `first_shard`: first shard value in the table, use as the start condition to scan table. a
+    -   `start_shard`: first shard value in the table, use as the start condition to scan table. a
         list or tuple.
     -   `number_per_shard`: how many rows of data a shard can contain. a number.
     -   `tolerance_of_shard`: the tolerance of one shard's capacity. a number.
@@ -102,8 +102,8 @@ a dictionary of sharding result, like:
 ```
 {
     "shard": [(), (), ...],
-    "number":   [number, number, ...],
-    "total":  number,
+    "number": [number, number, ...],
+    "total": number,
 }
 ```
 
@@ -351,9 +351,9 @@ sql_condition_between_shards(
     ["bucket_id", "scope", "key"], ("100000000", "a", "key_foo"), ("200000000", "a", "key_bar"))
 # ['`bucket_id` = "100000000" AND `scope` = "a" AND `key` >= "key_foo"',
 #  '`bucket_id` = "100000000" AND `scope` > "a"',
-#  '`bucket_id` = "200000000" AND `scope` = "a" AND `key` < "key_bar"',
+#  '`bucket_id` > "100000000" AND `bucket_id` < "200000000",
 #  '`bucket_id` = "200000000" AND `scope` < "a"',
-#  '`bucket_id` > "100000000" AND `bucket_id` < "200000000",]
+#  '`bucket_id` = "200000000" AND `scope` = "a" AND `key` < "key_bar"',]
 ```
 
 **argument**:
@@ -373,7 +373,7 @@ a list of string.
 ## mysqlutil.sql_dump_between_shards
 
 **syntax**:
-`mysqlutil.sql_dump_between_shards(shard_fields, dbinfo, table, sql_path, bin_path, start, end=None)`
+`mysqlutil.sql_dump_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None)`
 
 Generate mysql dump command for those rows between shard `start` and shard `end`: "[`start`, `end`)".
 If `end` is `None`, means that `start` is the last shard.
@@ -401,22 +401,22 @@ sql_dump_between_shards(['bucket_id', 'scope', 'key'],
 
 -   `shard_fields`:
     is table fields of which the shard consist. A list or tuple of string.
--   `dbinfo`:
+-   `conn`:
     is the info of the database which dump data from. A dict like:
     ```
     {
         'host': '127.0.0.1',
         'user': 'root',
-        'password': 'password',
+        'passwd': 'password',
         'port': 3306,
         'db': 'mysql',
     }
     ```
 -   `table`:
     is the name of the table which dump data from. A string.
--   `sql_path`:
+-   `path_dump_to`:
     is the path which dump data to. A list or tuple of strings, like: `['/tmp', 'table.sql']`.
--   `bin_path`:
+-   `dump_exec`:
     id the path where `mysqldump` is. A list or tuple of string, like: `['/usr', 'bin', 'mysqldump']`.
 -   `start`:
     is the beginning boundary of the condition range, a list or tuple of string.

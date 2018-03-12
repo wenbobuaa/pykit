@@ -118,31 +118,31 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
     return sql_to_return
 
 
-def sql_dump_between_shards(shard_fields, dbinfo, table, sql_path, bin_path, start, end=None):
+def sql_dump_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None):
 
     condition_between_shards = sql_condition_between_shards(
         shard_fields, start, end)
     condition = '(' + ') OR ('.join(condition_between_shards) + ')'
 
-    if len(sql_path) == 0:
+    if len(path_dump_to) == 0:
         rst_path = '{table}.sql'.format(table=table)
     else:
-        rst_path = os.path.join(*sql_path)
+        rst_path = os.path.join(*path_dump_to)
 
-    if len(bin_path) == 0:
+    if len(dump_exec) == 0:
         cmd = 'mysqldump'
     else:
-        cmd = os.path.join(*bin_path)
+        cmd = os.path.join(*dump_exec)
 
     return ('{cmd} --host={host} --port={port} --user={user} --password={password} {db} {table} ' +
             '-w {cond} > {rst_path}').format(
         cmd=quote(cmd, "'"),
-        host=quote(dbinfo.get('host', ''), "'"),
-        port=quote(str(dbinfo.get('port', '')), "'"),
-        user=quote(dbinfo.get('user', ''), "'"),
-        password=quote(dbinfo.get('passwd', ''), "'"),
+        host=quote(conn.get('host', ''), "'"),
+        port=quote(str(conn.get('port', '')), "'"),
+        user=quote(conn.get('user', ''), "'"),
+        password=quote(conn.get('passwd', ''), "'"),
 
-        db=quote(dbinfo.get('db', ''), "'"),
+        db=quote(conn.get('db', ''), "'"),
         table=quote(table, "'"),
         cond=quote(condition, "'"),
         rst_path=quote(rst_path, "'"),
@@ -152,13 +152,13 @@ def sql_dump_between_shards(shard_fields, dbinfo, table, sql_path, bin_path, sta
 def sql_condition_between_shards(shard_fields, start, end=None):
 
     if end is not None:
-        if start >= end:
-            return []
         if len(shard_fields) != len(end):
             raise InvalidShardLength(
                     "the number of fields in 'end' and 'shard_fields' is not equal")
+        if start >= end:
+            return []
     else:
-        end = start[:0]
+        end = type(start)()
 
     if len(shard_fields) != len(start):
         raise InvalidShardLength(
@@ -177,24 +177,24 @@ def sql_condition_between_shards(shard_fields, start, end=None):
         end = end[prefix_len:]
 
     start_shards = zip(shard_fields, start)
-    start_condition_first = concat_condition(start_shards, ' >= ')
-    start_condition = generate_shards_condition(start_shards[:-1], ' > ')
-    start_condition.insert(0, start_condition_first)
+    first_start_condition = concat_condition(
+        start_shards, ' >= ')  # left closed
+    start_conditions = generate_shards_condition(start_shards[:-1], ' > ')
+    start_conditions.insert(0, first_start_condition)
 
-    condition = []
-    condition += [prefix_condition + x for x in start_condition[:-1]]
+    condition = [prefix_condition + x for x in start_conditions[:-1]]
 
     if len(end) == 0:
-        condition.append(prefix_condition + start_condition[-1])
+        condition.append(prefix_condition + start_conditions[-1])
         return condition
 
     end_shards = zip(shard_fields, end)
-    end_condition = generate_shards_condition(end_shards, ' < ')
-
-    condition += [prefix_condition + x for x in end_condition[:-1]]
+    end_conditions = generate_shards_condition(end_shards, ' < ')
 
     condition.append(prefix_condition +
-                     start_condition[-1] + " AND " + end_condition[-1])
+                     start_conditions[-1] + " AND " + end_conditions[-1])
+
+    condition += reversed([prefix_condition + x for x in end_conditions[:-1]])
 
     return condition
 
