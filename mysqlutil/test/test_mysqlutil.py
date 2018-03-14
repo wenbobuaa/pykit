@@ -181,7 +181,7 @@ class TestMysqlutil(unittest.TestCase):
 
              'test index_name',
             ),
-            ([['_id'], [], ['stable', 'common0', '127.0.0.1', '8']],
+            ([['_id'], None, ['stable', 'common0', '127.0.0.1', '8']],
              {},
              'SELECT `_id` FROM `errlog` '
              'LIMIT 1024',
@@ -326,6 +326,28 @@ class TestMysqlutil(unittest.TestCase):
                 'test normal'
              ),
 
+            ((['id', 'service'], conn, table, '/tmp/key.sql', ['/usr', 'bin', 'mysqldump'],
+                ['10', 'a'], ['15', 'd']),
+                ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' " +
+                 "'mysql' 'key' -w '" +
+                 "(`id` = \"10\" AND `service` >= \"a\") OR " +
+                 "(`id` > \"10\" AND `id` < \"15\") OR " +
+                 "(`id` = \"15\" AND `service` < \"d\")" +
+                 "' > '/tmp/key.sql'"),
+                'test string path_dump_to'
+             ),
+
+            ((['id', 'service'], conn, table, ['/tmp', 'key.sql'], '/usr/bin/mysqldump',
+                ['10', 'a'], ['15', 'd']),
+                ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' " +
+                 "'mysql' 'key' -w '" +
+                 "(`id` = \"10\" AND `service` >= \"a\") OR " +
+                 "(`id` > \"10\" AND `id` < \"15\") OR " +
+                 "(`id` = \"15\" AND `service` < \"d\")" +
+                 "' > '/tmp/key.sql'"),
+                'test string mysqldump path'
+             ),
+
             ((['id', 'service'], conn, table, ['/tmp', 'key.sql'], ['/usr', 'bin', 'mysqldump'],
                 ['10', 'a']),
                 ("'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' " +
@@ -389,7 +411,7 @@ class TestMysqlutil(unittest.TestCase):
         cases = (
             ({
                 "shard_fields": ('service', 'ip', '_id'),
-                "first_shard": ['common0', '', ''],
+                "start_shard": ['common0', '', ''],
                 "number_per_shard": 10,
                 "tolerance_of_shard": 1,
                 "sharding_generator": tuple,
@@ -404,7 +426,7 @@ class TestMysqlutil(unittest.TestCase):
 
             ({
                 "shard_fields": ('service', 'ip', '_id'),
-                "first_shard": ['common0', '127.0.0.3', '27'],
+                "start_shard": ['common0', '127.0.0.3', '27'],
                 "number_per_shard": 10,
                 "tolerance_of_shard": 1,
                 "sharding_generator": tuple,
@@ -419,7 +441,7 @@ class TestMysqlutil(unittest.TestCase):
 
             ({
                 "shard_fields": ('service', 'ip', '_id'),
-                "first_shard": ['common0', '', ''],
+                "start_shard": ['common0', '', ''],
                 "number_per_shard": 10,
                 "tolerance_of_shard": 1,
                 "sharding_generator": sharding_generator,
@@ -434,7 +456,7 @@ class TestMysqlutil(unittest.TestCase):
 
             ({
                 "shard_fields": ('service', 'ip', '_id'),
-                "first_shard": ['common0', '', ''],
+                "start_shard": ['common0', '', ''],
                 "number_per_shard": 15,
                 "tolerance_of_shard": 2,
                 "sharding_generator": sharding_generator,
@@ -448,7 +470,7 @@ class TestMysqlutil(unittest.TestCase):
 
             ({
                 "shard_fields": ('time', '_id'),
-                "first_shard": ['201706060600', '1'],
+                "start_shard": ['201706060600', '1'],
                 "number_per_shard": 10,
                 "tolerance_of_shard": 1,
             },

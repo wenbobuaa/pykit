@@ -415,9 +415,11 @@ sql_dump_between_shards(['bucket_id', 'scope', 'key'],
 -   `table`:
     is the name of the table which dump data from. A string.
 -   `path_dump_to`:
-    is the path which dump data to. A list or tuple of strings, like: `['/tmp', 'table.sql']`.
+    is the path which dump data to. A list or tuple of strings, like: `['/tmp', 'table.sql']`. Or a
+    string, like `'/tmp/table.sql'`.
 -   `dump_exec`:
-    id the path where `mysqldump` is. A list or tuple of string, like: `['/usr', 'bin', 'mysqldump']`.
+    is the path where `mysqldump` is. A list or tuple of strings, like:
+    `['/usr', 'bin', 'mysqldump']`. Or a string, like `'/usr/bin/mysqldump'`.
 -   `start`:
     is the beginning boundary of the condition range, a list or tuple of string.
 -   `end`:

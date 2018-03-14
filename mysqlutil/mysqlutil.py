@@ -77,24 +77,26 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
                    left_open=False, limit=1024, index_name=None):
 
     if type(table) is str:
-        table_name = quote(table)
+        table_name = quote(table, "`")
     else:
-        table_name = '.'.join([quote(t) for t in table])
+        table_name = '.'.join([quote(t, "`") for t in table])
 
-    fields_to_return = ', '.join([quote(x) for x in result_fields])
+    fields_to_return = ', '.join([quote(x, "`") for x in result_fields])
     if len(fields_to_return) == 0:
         fields_to_return = '*'
 
-    force_index = ''
-    if index_name is not None:
-        force_index = ' FORCE INDEX (' + quote(index_name) + ')'
-    elif len(index_fields) > 0:
-        force_index = ' FORCE INDEX (' + quote('idx_' + '_'.join(index_fields)) + ')'
+    if index_name is None and index_fields is not None:
+        index_name = 'idx_' + '_'.join(index_fields)
+
+    if index_name is None:
+        force_index = ''
+    else:
+        force_index = ' FORCE INDEX (' + quote(index_name, "`") + ')'
 
     where_conditions = ''
-    index_pairs = zip(index_fields, index_values)
+    if index_fields is not None:
 
-    if len(index_pairs) > 0:
+        index_pairs = zip(index_fields, index_values)
 
         if left_open:
             operator = ' > '
@@ -124,13 +126,17 @@ def sql_dump_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, 
         shard_fields, start, end)
     condition = '(' + ') OR ('.join(condition_between_shards) + ')'
 
-    if len(path_dump_to) == 0:
+    if path_dump_to is None:
         rst_path = '{table}.sql'.format(table=table)
+    elif type(path_dump_to) is str:
+        rst_path = path_dump_to
     else:
         rst_path = os.path.join(*path_dump_to)
 
-    if len(dump_exec) == 0:
+    if dump_exec is None:
         cmd = 'mysqldump'
+    elif type(dump_exec) is str:
+        cmd = dump_exec
     else:
         cmd = os.path.join(*dump_exec)
 
@@ -218,15 +224,15 @@ def concat_condition(shards, operator, prefix=''):
     condition = []
 
     for s in shards[:-1]:
-        condition.append(prefix + quote(s[0]) + " = " + _safe(s[1]))
+        condition.append(prefix + quote(s[0], "`") + " = " + _safe(s[1]))
 
     s = shards[-1]
-    condition.append(prefix + quote(s[0]) + operator + _safe(s[1]))
+    condition.append(prefix + quote(s[0], "`") + operator + _safe(s[1]))
 
     return " AND ".join(condition)
 
 
-def quote(s, quote="`"):
+def quote(s, quote):
 
     if quote in s:
         s = s.replace(quote, "\\" + quote)
@@ -248,10 +254,10 @@ def get_sharding(conf):
     db = conf['db']
     table = conf['table']
     shard_fileds = conf['shard_fields']
-    first_shard = conf['first_shard']
+    start_shard = conf['start_shard']
 
     # args = [(db, table), result_fields, index_fields, start_index_values]
-    args = [(db, table), shard_fileds, shard_fileds, first_shard]
+    args = [(db, table), shard_fileds, shard_fileds, start_shard]
     kwargs = {"left_open": False, "use_dict": False, "retry": 3}
 
     conn = conf['conn']
@@ -270,7 +276,7 @@ def get_sharding(conf):
         if shard is not None:
             result['shard'].append(sharding_generator(shard))
         else:
-            result['shard'].append(sharding_generator(first_shard))
+            result['shard'].append(sharding_generator(start_shard))
 
         result['num'].append(count)
         result['total'] += int(count)
