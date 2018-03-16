@@ -4,6 +4,7 @@
 import os
 
 import MySQLdb
+import urllib
 
 from pykit import mysqlconnpool
 from pykit import strutil
@@ -76,10 +77,12 @@ def scan_index(connpool, table, result_fields, index_fields, index_values,
 def sql_scan_index(table, result_fields, index_fields, index_values,
                    left_open=False, limit=1024, index_name=None):
 
-    if type(table) is str:
+    if isinstance(table, basestring):
         table_name = quote(table, "`")
     else:
-        table_name = '.'.join([quote(t, "`") for t in table])
+        db = quote(table[0], "`")
+        tbl = quote(table[1], "`")
+        table_name = db + '.' + tbl
 
     fields_to_return = ', '.join([quote(x, "`") for x in result_fields])
     if len(fields_to_return) == 0:
@@ -104,7 +107,7 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
             operator = ' >= '
 
         prefix = table_name + '.'
-        and_conditions = concat_condition(
+        and_conditions = buildup_condition(
             index_pairs, operator, prefix=prefix)
 
         where_conditions = ' WHERE ' + and_conditions
@@ -120,22 +123,22 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
     return sql_to_return
 
 
-def sql_dump_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None):
+def get_sql_dump_command_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None):
 
-    condition_between_shards = sql_condition_between_shards(
+    condition_between_shards = get_sql_condition_between_shards(
         shard_fields, start, end)
     condition = '(' + ') OR ('.join(condition_between_shards) + ')'
 
     if path_dump_to is None:
-        rst_path = '{table}.sql'.format(table=table)
-    elif type(path_dump_to) is str:
+        rst_path = '{table}.sql'.format(table=urllib.quote_plus(table))
+    elif isinstance(path_dump_to, basestring):
         rst_path = path_dump_to
     else:
         rst_path = os.path.join(*path_dump_to)
 
     if dump_exec is None:
         cmd = 'mysqldump'
-    elif type(dump_exec) is str:
+    elif isinstance(dump_exec, basestring):
         cmd = dump_exec
     else:
         cmd = os.path.join(*dump_exec)
@@ -155,12 +158,12 @@ def sql_dump_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, 
     )
 
 
-def sql_condition_between_shards(shard_fields, start, end=None):
+def get_sql_condition_between_shards(shard_fields, start, end=None):
 
     if end is not None:
         if len(shard_fields) != len(end):
             raise InvalidShardLength(
-                    "the number of fields in 'end' and 'shard_fields' is not equal")
+                "the number of fields in 'end' and 'shard_fields' is not equal")
         if start >= end:
             return []
     else:
@@ -168,68 +171,70 @@ def sql_condition_between_shards(shard_fields, start, end=None):
 
     if len(shard_fields) != len(start):
         raise InvalidShardLength(
-                "the number of fields in 'start' and 'shard_fields' is not equal")
+            "the number of fields in 'start' and 'shard_fields' is not equal")
 
-    same_fields = strutil.common_prefix(start, end, recursive=False)
+    common_prefix = strutil.common_prefix(start, end, recursive=False)
     prefix_condition = ''
-    prefix_len = len(same_fields)
+    prefix_len = len(common_prefix)
     if prefix_len > 0:
-        prefix_shards = zip(shard_fields[:prefix_len], start[:prefix_len])
-        prefix_condition = concat_condition(prefix_shards, ' = ')
+        prefix_param_pairs = zip(shard_fields[:prefix_len], start[:prefix_len])
+        prefix_condition = buildup_condition(prefix_param_pairs, ' = ')
         prefix_condition += " AND "
 
         shard_fields = shard_fields[prefix_len:]
         start = start[prefix_len:]
         end = end[prefix_len:]
 
-    start_shards = zip(shard_fields, start)
-    first_start_condition = concat_condition(
-        start_shards, ' >= ')  # left closed
-    start_conditions = generate_shards_condition(start_shards[:-1], ' > ')
+    start_param_pairs = zip(shard_fields, start)
+
+    # left closed
+    first_start_condition = buildup_condition(start_param_pairs, ' >= ')
+
+    start_conditions = generate_condition_expressions(
+        start_param_pairs[:-1], ' > ')
     start_conditions.insert(0, first_start_condition)
 
-    condition = [prefix_condition + x for x in start_conditions[:-1]]
+    conditions = [prefix_condition + x for x in start_conditions[:-1]]
 
     if len(end) == 0:
-        condition.append(prefix_condition + start_conditions[-1])
-        return condition
+        conditions.append(prefix_condition + start_conditions[-1])
+        return conditions
 
-    end_shards = zip(shard_fields, end)
-    end_conditions = generate_shards_condition(end_shards, ' < ')
+    end_param_pairs = zip(shard_fields, end)
+    end_conditions = generate_condition_expressions(end_param_pairs, ' < ')
 
-    condition.append(prefix_condition +
+    conditions.append(prefix_condition +
                      start_conditions[-1] + " AND " + end_conditions[-1])
 
-    condition += reversed([prefix_condition + x for x in end_conditions[:-1]])
-
-    return condition
-
-
-def generate_shards_condition(shards, operator):
-
-    conditions = []
-    shards_to_connect = shards[:]
-    while len(shards_to_connect) > 0:
-
-        and_condition = concat_condition(shards_to_connect, operator)
-        conditions.append(and_condition)
-
-        shards_to_connect = shards_to_connect[:-1]
+    conditions += reversed([prefix_condition + x for x in end_conditions[:-1]])
 
     return conditions
 
 
-def concat_condition(shards, operator, prefix=''):
+def generate_condition_expressions(parameters, operator):
 
-    condition = []
+    conditions = []
+    parameters_to_build = parameters[:]
+    while len(parameters_to_build) > 0:
 
-    for s in shards[:-1]:
-        condition.append(prefix + quote(s[0], "`") + " = " + _safe(s[1]))
+        conditions.append(buildup_condition(parameters_to_build, operator))
 
-    s = shards[-1]
-    condition.append(prefix + quote(s[0], "`") + operator + _safe(s[1]))
+        parameters_to_build = parameters_to_build[:-1]
 
-    return " AND ".join(condition)
+    return conditions
+
+
+def buildup_condition(parameters, operator, prefix=''):
+
+    cond_expressions = []
+
+    for k, v in parameters[:-1]:
+        cond_expressions.append(prefix + quote(k, "`") + " = " + _safe(v))
+
+    key, value = parameters[-1]
+    cond_expressions.append(prefix + quote(key, "`") + operator + _safe(value))
+
+    return " AND ".join(cond_expressions)
 
 
 def quote(s, quote):

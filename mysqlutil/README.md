@@ -10,12 +10,12 @@
   - [mysqlutil.IndexNotPairs](#mysqlutilindexnotpairs)
 - [Methods](#methods)
   - [mysqlutil.get_sharding](#mysqlutilget_sharding)
+  - [mysqlutil.get_sql_condition_between_shards](#mysqlutilget_sql_condition_between_shards)
+  - [mysqlutil.get_sql_dump_command_between_shards](#mysqlutilget_sql_dump_command_between_shards)
   - [mysqlutil.gtidset.compare](#mysqlutilgtidsetcompare)
   - [mysqlutil.gtidset.dump](#mysqlutilgtidsetdump)
   - [mysqlutil.gtidset.load](#mysqlutilgtidsetload)
   - [mysqlutil.scan_index](#mysqlutilscan_index)
-  - [mysqlutil.sql_condition_between_shards](#mysqlutilsql_condition_between_shards)
-  - [mysqlutil.sql_dump_between_shards](#mysqlutilsql_dump_between_shards)
   - [mysqlutil.sql_scan_index](#mysqlutilsql_scan_index)
 - [Author](#author)
 - [Copyright and License](#copyright-and-license)
@@ -110,6 +110,98 @@ a dictionary of sharding result, like:
 -   `shard`: sharding info, contain first row of every shard as a list.
 -   `number`: numbers of rows in every shard.
 -   `total`: number of rows of all shards.
+
+
+## mysqlutil.get_sql_condition_between_shards
+
+**syntax**:
+`mysqlutil.get_sql_condition_between_shards(shard_fields, start, end=None)`
+
+Generate mysql dump conditions for those rows between shard `start` and shard `end`: "[`start`, `end`)".
+If `end` is `None`, means that `start` is the last shard.
+
+```
+get_sql_condition_between_shards(
+    ["bucket_id", "scope", "key"], ("100000000", "a", "key_foo"), ("200000000", "a", "key_bar"))
+# ['`bucket_id` = "100000000" AND `scope` = "a" AND `key` >= "key_foo"',
+#  '`bucket_id` = "100000000" AND `scope` > "a"',
+#  '`bucket_id` > "100000000" AND `bucket_id` < "200000000",
+#  '`bucket_id` = "200000000" AND `scope` < "a"',
+#  '`bucket_id` = "200000000" AND `scope` = "a" AND `key` < "key_bar"',]
+```
+
+**argument**:
+
+-   `shard_fields`:
+    is table fields of which the shard consist. A list or tuple of string.
+-   `start`:
+    is the beginning boundary of the condition range, a list or tuple of string.
+-   `end`:
+    is the ending boundary of the condition range, a list or tuple of string. If `end` is `None`,
+    then condtion generated has no ending boundary.
+
+**return**:
+a list of string.
+
+
+## mysqlutil.get_sql_dump_command_between_shards
+
+**syntax**:
+`mysqlutil.get_sql_dump_command_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None)`
+
+Generate mysql dump command for those rows between shard `start` and shard `end`: "[`start`, `end`)".
+If `end` is `None`, means that `start` is the last shard.
+
+```
+get_sql_dump_command_between_shards(['bucket_id', 'scope', 'key'],
+    {
+        'host': '127.0.0.1',
+        'user': 'root',
+        'passwd': 'password',
+        'port': 3306,
+        'db': 'mysql',
+    },
+    'key',
+    ['/user', 'bin', 'mysqldump'],
+    ['10', 'a'], ['15', 'd']
+)
+
+# "'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' 'mysql' 'key' -w "\
+# "'(`id` = \"10\" AND `service` >= \"a\") OR (`id` = \"15\" AND `service` < \"d\") OR "\
+# "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"
+```
+
+**argument**:
+
+-   `shard_fields`:
+    is table fields of which the shard consist. A list or tuple of string.
+-   `conn`:
+    is the info of the database which dump data from. A dict like:
+    ```
+    {
+        'host': '127.0.0.1',
+        'user': 'root',
+        'passwd': 'password',
+        'port': 3306,
+        'db': 'mysql',
+    }
+    ```
+-   `table`:
+    is the name of the table which dump data from. A string.
+-   `path_dump_to`:
+    is the path which dump data to. A list or tuple of strings, like: `['/tmp', 'table.sql']`. Or a
+    string, like `'/tmp/table.sql'`.
+-   `dump_exec`:
+    is the path where `mysqldump` is. A list or tuple of strings, like:
+    `['/usr', 'bin', 'mysqldump']`. Or a string, like `'/usr/bin/mysqldump'`.
+-   `start`:
+    is the beginning boundary of the condition range, a list or tuple of string.
+-   `end`:
+    is the ending boundary of the condition range, a list or tuple of string. If `end` is `None`,
+    then condtion generated has no ending boundary.
+
+**return**:
+a string.
 
 
 ##  mysqlutil.gtidset.compare
@@ -336,98 +428,6 @@ for rr in rst:
 
 **return**:
 a generator which generates rows of the sql select result with those arguments once a time.
-
-
-## mysqlutil.sql_condition_between_shards
-
-**syntax**:
-`mysqlutil.sql_condition_between_shards(shard_fields, start, end=None)`
-
-Generate mysql dump conditions for those rows between shard `start` and shard `end`: "[`start`, `end`)".
-If `end` is `None`, means that `start` is the last shard.
-
-```
-sql_condition_between_shards(
-    ["bucket_id", "scope", "key"], ("100000000", "a", "key_foo"), ("200000000", "a", "key_bar"))
-# ['`bucket_id` = "100000000" AND `scope` = "a" AND `key` >= "key_foo"',
-#  '`bucket_id` = "100000000" AND `scope` > "a"',
-#  '`bucket_id` > "100000000" AND `bucket_id` < "200000000",
-#  '`bucket_id` = "200000000" AND `scope` < "a"',
-#  '`bucket_id` = "200000000" AND `scope` = "a" AND `key` < "key_bar"',]
-```
-
-**argument**:
-
--   `shard_fields`:
-    is table fields of which the shard consist. A list or tuple of string.
--   `start`:
-    is the beginning boundary of the condition range, a list or tuple of string.
--   `end`:
-    is the ending boundary of the condition range, a list or tuple of string. If `end` is `None`,
-    then condtion generated has no ending boundary.
-
-**return**:
-a list of string.
-
-
-## mysqlutil.sql_dump_between_shards
-
-**syntax**:
-`mysqlutil.sql_dump_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None)`
-
-Generate mysql dump command for those rows between shard `start` and shard `end`: "[`start`, `end`)".
-If `end` is `None`, means that `start` is the last shard.
-
-```
-sql_dump_between_shards(['bucket_id', 'scope', 'key'],
-    {
-        'host': '127.0.0.1',
-        'user': 'root',
-        'passwd': 'password',
-        'port': 3306,
-        'db': 'mysql',
-    },
-    'key',
-    ['/user', 'bin', 'mysqldump'],
-    ['10', 'a'], ['15', 'd']
-)
-
-# "'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' 'mysql' 'key' -w "\
-# "'(`id` = \"10\" AND `service` >= \"a\") OR (`id` = \"15\" AND `service` < \"d\") OR "\
-# "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"
-```
-
-**argument**:
-
--   `shard_fields`:
-    is table fields of which the shard consist. A list or tuple of string.
--   `conn`:
-    is the info of the database which dump data from. A dict like:
-    ```
-    {
-        'host': '127.0.0.1',
-        'user': 'root',
-        'passwd': 'password',
-        'port': 3306,
-        'db': 'mysql',
-    }
-    ```
--   `table`:
-    is the name of the table which dump data from. A string.
--   `path_dump_to`:
-    is the path which dump data to. A list or tuple of strings, like: `['/tmp', 'table.sql']`. Or a
-    string, like `'/tmp/table.sql'`.
--   `dump_exec`:
-    is the path where `mysqldump` is. A list or tuple of strings, like:
-    `['/usr', 'bin', 'mysqldump']`. Or a string, like `'/usr/bin/mysqldump'`.
--   `start`:
-    is the beginning boundary of the condition range, a list or tuple of string.
--   `end`:
-    is the ending boundary of the condition range, a list or tuple of string. If `end` is `None`,
-    then condtion generated has no ending boundary.
-
-**return**:
-a string.
 
 
 ## mysqlutil.sql_scan_index
