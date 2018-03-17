@@ -211,7 +211,7 @@ class TestMysqlutil(unittest.TestCase):
 
             self.assertEquals(rst, rst_expect)
 
-    def test_get_sql_condition_between_shards(self):
+    def test_make_sql_condition_between_shards(self):
 
         cases = (
             ((['id'], ['10']),
@@ -288,12 +288,12 @@ class TestMysqlutil(unittest.TestCase):
             dd('msg: ', msg)
             dd('expected: ', rst_expected)
 
-            rst = mysqlutil.get_sql_condition_between_shards(*args)
+            rst = mysqlutil.make_sql_condition_between_shards(*args)
             dd('rst     : ', rst)
 
             self.assertEqual(rst, rst_expected)
 
-    def test_get_sql_dump_command_between_shards(self):
+    def test_make_dump_command_between_shards(self):
 
         conn = {
             'host': '127.0.0.1',
@@ -384,12 +384,12 @@ class TestMysqlutil(unittest.TestCase):
         for args, rst_expected, msg in cases:
             dd('msg: ', msg)
             dd('expected: ', rst_expected)
-            rst = mysqlutil.get_sql_dump_command_between_shards(*args)
+            rst = mysqlutil.make_dump_command_between_shards(*args)
             dd('rst     : ', rst)
 
             self.assertEquals(rst_expected, rst)
 
-    def test_get_sharding(self):
+    def test_make_sharding(self):
 
         mysql_ip = start_mysql_server()
 
@@ -490,7 +490,7 @@ class TestMysqlutil(unittest.TestCase):
                 args['table'] = table
                 args['conn'] = conn
                 dd('expected: ', expected)
-                result = mysqlutil.get_sharding(args)
+                result = mysqlutil.make_sharding(args)
                 dd('result  : ', result)
                 self.assertEqual(result, expected)
         finally:

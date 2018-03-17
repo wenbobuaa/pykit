@@ -9,9 +9,9 @@
   - [mysqlutil.ConnectionTypeError](#mysqlutilconnectiontypeerror)
   - [mysqlutil.IndexNotPairs](#mysqlutilindexnotpairs)
 - [Methods](#methods)
-  - [mysqlutil.get_sharding](#mysqlutilget_sharding)
-  - [mysqlutil.get_sql_condition_between_shards](#mysqlutilget_sql_condition_between_shards)
-  - [mysqlutil.get_sql_dump_command_between_shards](#mysqlutilget_sql_dump_command_between_shards)
+  - [mysqlutil.make_dump_command_between_shards](#mysqlutilmake_dump_command_between_shards)
+  - [mysqlutil.make_sharding](#mysqlutilmake_sharding)
+  - [mysqlutil.make_sql_condition_between_shards](#mysqlutilmake_sql_condition_between_shards)
   - [mysqlutil.gtidset.compare](#mysqlutilgtidsetcompare)
   - [mysqlutil.gtidset.dump](#mysqlutilgtidsetdump)
   - [mysqlutil.gtidset.load](#mysqlutilgtidsetload)
@@ -56,10 +56,70 @@ A subclass of `Exception`, raise if length of `index_values` and `index_fields` 
 #   Methods
 
 
-## mysqlutil.get_sharding
+## mysqlutil.make_dump_command_between_shards
 
 **syntax**:
-`mysqlutil.get_sharding(conf)`
+`mysqlutil.make_dump_command_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None)`
+
+Generate mysql dump command for those rows between shard `start` and shard `end`: "[`start`, `end`)".
+If `end` is `None`, means that `start` is the last shard.
+
+```
+make_dump_command_between_shards(['bucket_id', 'scope', 'key'],
+    {
+        'host': '127.0.0.1',
+        'user': 'root',
+        'passwd': 'password',
+        'port': 3306,
+        'db': 'mysql',
+    },
+    'key',
+    ['/user', 'bin', 'mysqldump'],
+    ['10', 'a'], ['15', 'd']
+)
+
+# "'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' 'mysql' 'key' -w "\
+# "'(`id` = \"10\" AND `service` >= \"a\") OR (`id` = \"15\" AND `service` < \"d\") OR "\
+# "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"
+```
+
+**argument**:
+
+-   `shard_fields`:
+    is table fields of which the shard consist. A list or tuple of string.
+-   `conn`:
+    is the info of the database which dump data from. A dict like:
+    ```
+    {
+        'host': '127.0.0.1',
+        'user': 'root',
+        'passwd': 'password',
+        'port': 3306,
+        'db': 'mysql',
+    }
+    ```
+-   `table`:
+    is the name of the table which dump data from. A string.
+-   `path_dump_to`:
+    is the path which dump data to. A list or tuple of strings, like: `['/tmp', 'table.sql']`. Or a
+    string, like `'/tmp/table.sql'`.
+-   `dump_exec`:
+    is the path where `mysqldump` is. A list or tuple of strings, like:
+    `['/usr', 'bin', 'mysqldump']`. Or a string, like `'/usr/bin/mysqldump'`.
+-   `start`:
+    is the beginning boundary of the condition range, a list or tuple of string.
+-   `end`:
+    is the ending boundary of the condition range, a list or tuple of string. If `end` is `None`,
+    then condtion generated has no ending boundary.
+
+**return**:
+a string.
+
+
+## mysqlutil.make_sharding
+
+**syntax**:
+`mysqlutil.make_sharding(conf)`
 
 Scan a database table and generate sharding info according configurations in `conf`.
 Return sharding result as a dictionary like:
@@ -112,16 +172,16 @@ a dictionary of sharding result, like:
 -   `total`: number of rows of all shards.
 
 
-## mysqlutil.get_sql_condition_between_shards
+## mysqlutil.make_sql_condition_between_shards
 
 **syntax**:
-`mysqlutil.get_sql_condition_between_shards(shard_fields, start, end=None)`
+`mysqlutil.make_sql_condition_between_shards(shard_fields, start, end=None)`
 
 Generate mysql dump conditions for those rows between shard `start` and shard `end`: "[`start`, `end`)".
 If `end` is `None`, means that `start` is the last shard.
 
 ```
-get_sql_condition_between_shards(
+make_sql_condition_between_shards(
     ["bucket_id", "scope", "key"], ("100000000", "a", "key_foo"), ("200000000", "a", "key_bar"))
 # ['`bucket_id` = "100000000" AND `scope` = "a" AND `key` >= "key_foo"',
 #  '`bucket_id` = "100000000" AND `scope` > "a"',
@@ -142,66 +202,6 @@ get_sql_condition_between_shards(
 
 **return**:
 a list of string.
-
-
-## mysqlutil.get_sql_dump_command_between_shards
-
-**syntax**:
-`mysqlutil.get_sql_dump_command_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None)`
-
-Generate mysql dump command for those rows between shard `start` and shard `end`: "[`start`, `end`)".
-If `end` is `None`, means that `start` is the last shard.
-
-```
-get_sql_dump_command_between_shards(['bucket_id', 'scope', 'key'],
-    {
-        'host': '127.0.0.1',
-        'user': 'root',
-        'passwd': 'password',
-        'port': 3306,
-        'db': 'mysql',
-    },
-    'key',
-    ['/user', 'bin', 'mysqldump'],
-    ['10', 'a'], ['15', 'd']
-)
-
-# "'/usr/bin/mysqldump' --host='127.0.0.1' --port='3306' --user='root' --password='password' 'mysql' 'key' -w "\
-# "'(`id` = \"10\" AND `service` >= \"a\") OR (`id` = \"15\" AND `service` < \"d\") OR "\
-# "(`id` > \"10\" AND `id` < \"15\")' > '/tmp/key.sql'"
-```
-
-**argument**:
-
--   `shard_fields`:
-    is table fields of which the shard consist. A list or tuple of string.
--   `conn`:
-    is the info of the database which dump data from. A dict like:
-    ```
-    {
-        'host': '127.0.0.1',
-        'user': 'root',
-        'passwd': 'password',
-        'port': 3306,
-        'db': 'mysql',
-    }
-    ```
--   `table`:
-    is the name of the table which dump data from. A string.
--   `path_dump_to`:
-    is the path which dump data to. A list or tuple of strings, like: `['/tmp', 'table.sql']`. Or a
-    string, like `'/tmp/table.sql'`.
--   `dump_exec`:
-    is the path where `mysqldump` is. A list or tuple of strings, like:
-    `['/usr', 'bin', 'mysqldump']`. Or a string, like `'/usr/bin/mysqldump'`.
--   `start`:
-    is the beginning boundary of the condition range, a list or tuple of string.
--   `end`:
-    is the ending boundary of the condition range, a list or tuple of string. If `end` is `None`,
-    then condtion generated has no ending boundary.
-
-**return**:
-a string.
 
 
 ##  mysqlutil.gtidset.compare

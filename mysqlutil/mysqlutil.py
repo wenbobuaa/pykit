@@ -84,9 +84,9 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
         tbl = quote(table[1], "`")
         table_name = db + '.' + tbl
 
-    fields_to_return = ', '.join([quote(x, "`") for x in result_fields])
-    if len(fields_to_return) == 0:
-        fields_to_return = '*'
+    rst_flds = ', '.join([quote(x, "`") for x in result_fields])
+    if len(rst_flds) == 0:
+        rst_flds = '*'
 
     if index_name is None and index_fields is not None:
         index_name = 'idx_' + '_'.join(index_fields)
@@ -107,14 +107,14 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
             operator = ' >= '
 
         prefix = table_name + '.'
-        and_conditions = buildup_condition(
+        and_conditions = make_condition(
             index_pairs, operator, prefix=prefix)
 
         where_conditions = ' WHERE ' + and_conditions
 
     limit = int(limit)
 
-    sql_to_return = ('SELECT ' + fields_to_return +
+    sql_to_return = ('SELECT ' + rst_flds +
                      ' FROM ' + table_name +
                      force_index +
                      where_conditions +
@@ -123,11 +123,10 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
     return sql_to_return
 
 
-def get_sql_dump_command_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None):
+def make_dump_command_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None):
 
-    condition_between_shards = get_sql_condition_between_shards(
-        shard_fields, start, end)
-    condition = '(' + ') OR ('.join(condition_between_shards) + ')'
+    conditions = make_sql_condition_between_shards(shard_fields, start, end)
+    cond_expression = '(' + ') OR ('.join(conditions) + ')'
 
     if path_dump_to is None:
         rst_path = '{table}.sql'.format(table=urllib.quote_plus(table))
@@ -153,12 +152,12 @@ def get_sql_dump_command_between_shards(shard_fields, conn, table, path_dump_to,
 
         db=quote(conn.get('db', ''), "'"),
         table=quote(table, "'"),
-        cond=quote(condition, "'"),
+        cond=quote(cond_expression, "'"),
         rst_path=quote(rst_path, "'"),
     )
 
 
-def get_sql_condition_between_shards(shard_fields, start, end=None):
+def make_sql_condition_between_shards(shard_fields, start, end=None):
 
     if end is not None:
         if len(shard_fields) != len(end):
@@ -174,12 +173,12 @@ def get_sql_condition_between_shards(shard_fields, start, end=None):
             "the number of fields in 'start' and 'shard_fields' is not equal")
 
     common_prefix = strutil.common_prefix(start, end, recursive=False)
-    prefix_condition = ''
+    pre_condition = ''
     prefix_len = len(common_prefix)
     if prefix_len > 0:
-        prefix_param_pairs = zip(shard_fields[:prefix_len], start[:prefix_len])
-        prefix_condition = buildup_condition(prefix_param_pairs, ' = ')
-        prefix_condition += " AND "
+        pre_param_pairs = zip(shard_fields[:prefix_len], start[:prefix_len])
+        pre_condition = make_condition(pre_param_pairs, ' = ')
+        pre_condition += " AND "
 
         shard_fields = shard_fields[prefix_len:]
         start = start[prefix_len:]
@@ -188,25 +187,25 @@ def get_sql_condition_between_shards(shard_fields, start, end=None):
     start_param_pairs = zip(shard_fields, start)
 
     # left closed
-    first_start_condition = buildup_condition(start_param_pairs, ' >= ')
+    first_start_condition = make_condition(start_param_pairs, ' >= ')
 
     start_conditions = generate_condition_expressions(
         start_param_pairs[:-1], ' > ')
     start_conditions.insert(0, first_start_condition)
 
-    conditions = [prefix_condition + x for x in start_conditions[:-1]]
+    conditions = [pre_condition + x for x in start_conditions[:-1]]
 
     if len(end) == 0:
-        conditions.append(prefix_condition + start_conditions[-1])
+        conditions.append(pre_condition + start_conditions[-1])
         return conditions
 
     end_param_pairs = zip(shard_fields, end)
     end_conditions = generate_condition_expressions(end_param_pairs, ' < ')
 
-    conditions.append(prefix_condition +
+    conditions.append(pre_condition +
                      start_conditions[-1] + " AND " + end_conditions[-1])
 
-    conditions += reversed([prefix_condition + x for x in end_conditions[:-1]])
+    conditions += reversed([pre_condition + x for x in end_conditions[:-1]])
 
     return conditions
 
@@ -214,17 +213,17 @@ def get_sql_condition_between_shards(shard_fields, start, end=None):
 def generate_condition_expressions(parameters, operator):
 
     conditions = []
-    parameters_to_build = parameters[:]
-    while len(parameters_to_build) > 0:
+    param_to_use = parameters[:]
+    while len(param_to_use) > 0:
 
-        conditions.append(buildup_condition(parameters_to_build, operator))
+        conditions.append(make_condition(param_to_use, operator))
 
-        parameters_to_build = parameters_to_build[:-1]
+        param_to_use = param_to_use[:-1]
 
     return conditions
 
 
-def buildup_condition(parameters, operator, prefix=''):
+def make_condition(parameters, operator, prefix=''):
 
     cond_expressions = []
 
@@ -248,7 +247,7 @@ def _safe(s):
     return '"' + MySQLdb.escape_string(s) + '"'
 
 
-def get_sharding(conf):
+def make_sharding(conf):
 
     result = {
             "shard": [],
