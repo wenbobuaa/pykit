@@ -159,68 +159,97 @@ def make_dump_command_between_shards(shard_fields, conn, table, path_dump_to, du
 
 def make_sql_condition_between_shards(shard_fields, start, end=None):
 
-    if end is not None:
-        if len(shard_fields) != len(end):
-            raise InvalidShardLength(
-                "the number of fields in 'end' and 'shard_fields' is not equal")
-        if start >= end:
-            return []
-    else:
-        end = type(start)()
+    shard_len = len(shard_fields)
+    common_prefix = None
 
-    if len(shard_fields) != len(start):
+    if len(start) != shard_len:
         raise InvalidShardLength(
             "the number of fields in 'start' and 'shard_fields' is not equal")
 
-    common_prefix = strutil.common_prefix(start, end, recursive=False)
-    pre_condition = ''
-    prefix_len = len(common_prefix)
-    if prefix_len > 0:
-        pre_param_pairs = zip(shard_fields[:prefix_len], start[:prefix_len])
-        pre_condition = make_condition(pre_param_pairs, ' = ')
-        pre_condition += " AND "
+    if end is None:
+        end = type(start)([None] * len(start))
+        common_prefix = []
 
-        shard_fields = shard_fields[prefix_len:]
-        start = start[prefix_len:]
-        end = end[prefix_len:]
+    elif len(end) != shard_len:
+        raise InvalidShardLength(
+            "the number of fields in 'end' and 'shard_fields' is not equal")
 
-    start_param_pairs = zip(shard_fields, start)
+    elif start >= end:
+        return []
 
-    # left closed
-    first_start_condition = make_condition(start_param_pairs, ' >= ')
+    flds_range = {}
+    for i in xrange(shard_len):
+        flds_range[shard_fields[i]] = (start[i], end[i])
 
-    start_conditions = generate_condition_expressions(
-        start_param_pairs[:-1], ' > ')
-    start_conditions.insert(0, first_start_condition)
+    if common_prefix is None:
+        common_prefix = strutil.common_prefix(start, end, recursive=False)
 
-    conditions = [pre_condition + x for x in start_conditions[:-1]]
+    # fielld range is (start, end), when start equals to end, it is a blank range
+    first_effective_fld = shard_fields[len(common_prefix)]
 
-    if len(end) == 0:
-        conditions.append(pre_condition + start_conditions[-1])
-        return conditions
+    conditions = make_range_conditions(flds_range, shard_fields, first_effective_fld)
 
-    end_param_pairs = zip(shard_fields, end)
-    end_conditions = generate_condition_expressions(end_param_pairs, ' < ')
+    result = []
+    for cond in conditions:
 
-    conditions.append(pre_condition +
-                     start_conditions[-1] + " AND " + end_conditions[-1])
+        sql_conds = []
+        for fld, operator, val in cond:
+            sql_conds.append(quote(fld, '`') + operator + _safe(val))
 
-    conditions += reversed([pre_condition + x for x in end_conditions[:-1]])
+        result.append(' AND '.join(sql_conds))
 
-    return conditions
+    return result
 
 
-def generate_condition_expressions(parameters, operator):
+def make_range_conditions(flds_range, flds, first_effective_fld, left_close=True):
 
-    conditions = []
-    param_to_use = parameters[:]
-    while len(param_to_use) > 0:
+    result = []
+    left = 0
+    right = 1
 
-        conditions.append(make_condition(param_to_use, operator))
+    operator = ' > '
+    range_side = left
+    req_flds = len(flds)
 
-        param_to_use = param_to_use[:-1]
+    while True:
 
-    return conditions
+        cond = []
+        for i in xrange(req_flds - 1):
+            fld = flds[i]
+            _range = flds_range[fld]
+            cond.append((fld, ' = ', _range[range_side]))
+
+        fld = flds[req_flds - 1]
+        _range = flds_range[fld]
+
+        if range_side == left and left_close:
+            cond.append((fld, ' >= ', _range[left]))
+            left_close = False
+        else:
+            cond.append((fld, operator, _range[range_side]))
+
+        if fld == first_effective_fld:
+            # no right boundary
+            if _range[right] is None:
+                result.append(cond)
+                break
+
+            operator = ' < '
+            range_side = right
+
+            cond.append((fld, operator, _range[range_side]))
+
+        if range_side == left:
+            req_flds -= 1
+        else:
+            req_flds += 1
+
+        result.append(cond)
+
+        if req_flds > len(flds):
+            break
+
+    return result
 
 
 def make_condition(parameters, operator, prefix=''):
