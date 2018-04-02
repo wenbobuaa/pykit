@@ -5,9 +5,9 @@ from . import (
 from .mysqlutil import (
     ConnectionTypeError,
     IndexNotPairs,
-    make_dump_command_between_shards,
+    make_mysqldump_in_range,
     make_sharding,
-    make_sql_condition_between_shards,
+    make_sql_condition_in_range,
     scan_index,
     sql_scan_index,
 )
@@ -18,11 +18,11 @@ from privilege import (
 
 __all__ = [
     "ConnectionTypeError",
-    "make_dump_command_between_shards",
-    "make_sharding",
-    "make_sql_condition_between_shards",
-    "gtidset",
     "IndexNotPairs",
+    "gtidset",
+    "make_mysqldump_in_range",
+    "make_sharding",
+    "make_sql_condition_in_range",
     "privileges",
     "scan_index",
     "sql_scan_index",

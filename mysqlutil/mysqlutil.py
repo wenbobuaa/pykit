@@ -107,7 +107,7 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
             operator = ' >= '
 
         prefix = table_name + '.'
-        and_conditions = make_condition(
+        and_conditions = make_sql_condition(
             index_pairs, operator, prefix=prefix)
 
         where_conditions = ' WHERE ' + and_conditions
@@ -123,9 +123,9 @@ def sql_scan_index(table, result_fields, index_fields, index_values,
     return sql_to_return
 
 
-def make_dump_command_between_shards(shard_fields, conn, table, path_dump_to, dump_exec, start, end=None):
+def make_mysqldump_in_range(fields, conn, table, path_dump_to, dump_exec, start, end=None):
 
-    conditions = make_sql_condition_between_shards(shard_fields, start, end)
+    conditions = make_sql_condition_in_range(fields, start, end)
     cond_expression = '(' + ') OR ('.join(conditions) + ')'
 
     if path_dump_to is None:
@@ -157,37 +157,29 @@ def make_dump_command_between_shards(shard_fields, conn, table, path_dump_to, du
     )
 
 
-def make_sql_condition_between_shards(shard_fields, start, end=None):
+def make_sql_condition_in_range(fields, start, end=None):
 
-    shard_len = len(shard_fields)
-    common_prefix = None
+    fld_len = len(fields)
 
-    if len(start) != shard_len:
+    if len(start) != fld_len:
         raise InvalidShardLength(
             "the number of fields in 'start' and 'shard_fields' is not equal")
 
     if end is None:
         end = type(start)([None] * len(start))
-        common_prefix = []
 
-    elif len(end) != shard_len:
+    elif len(end) != fld_len:
         raise InvalidShardLength(
             "the number of fields in 'end' and 'shard_fields' is not equal")
 
     elif start >= end:
         return []
 
-    flds_range = {}
-    for i in xrange(shard_len):
-        flds_range[shard_fields[i]] = (start[i], end[i])
+    fld_ranges = []
+    for i in xrange(fld_len):
+        fld_ranges.append((fields[i], (start[i], end[i]),))
 
-    if common_prefix is None:
-        common_prefix = strutil.common_prefix(start, end, recursive=False)
-
-    # fielld range is (start, end), when start equals to end, it is a blank range
-    first_effective_fld = shard_fields[len(common_prefix)]
-
-    conditions = make_range_conditions(flds_range, shard_fields, first_effective_fld)
+    conditions = make_range_conditions(fld_ranges)
 
     result = []
     for cond in conditions:
@@ -201,26 +193,37 @@ def make_sql_condition_between_shards(shard_fields, start, end=None):
     return result
 
 
-def make_range_conditions(flds_range, flds, first_effective_fld, left_close=True):
+def make_range_conditions(fld_ranges, left_close=True):
 
     result = []
     left = 0
     right = 1
 
+    # field range is (start, end), if start equals to end, it is a blank range.
+    # continuose blank ranges in the beginning of field ranges should not concat with '>' or '<'.
+    n_pref_range_blank_flds = 0
+    for fld, _range in fld_ranges:
+        if _range[left] == _range[right]:
+            n_pref_range_blank_flds += 1
+        else:
+            break
+
+    first_effective_fld = fld_ranges[n_pref_range_blank_flds][0]
+
+    len_flds = len(fld_ranges)
+
+    # init
     operator = ' > '
     range_side = left
-    req_flds = len(flds)
+    n_flds_use = len_flds
 
     while True:
 
         cond = []
-        for i in xrange(req_flds - 1):
-            fld = flds[i]
-            _range = flds_range[fld]
+        for fld, _range in fld_ranges[:n_flds_use - 1]:
             cond.append((fld, ' = ', _range[range_side]))
 
-        fld = flds[req_flds - 1]
-        _range = flds_range[fld]
+        fld, _range = fld_ranges[n_flds_use - 1]
 
         if range_side == left and left_close:
             cond.append((fld, ' >= ', _range[left]))
@@ -232,34 +235,34 @@ def make_range_conditions(flds_range, flds, first_effective_fld, left_close=True
             # no right boundary
             if _range[right] is None:
                 result.append(cond)
-                break
+                return result
+
+            cond.append((fld, ' < ', _range[right]))
 
             operator = ' < '
             range_side = right
 
-            cond.append((fld, operator, _range[range_side]))
-
         if range_side == left:
-            req_flds -= 1
+            n_flds_use -= 1
         else:
-            req_flds += 1
+            n_flds_use += 1
 
         result.append(cond)
 
-        if req_flds > len(flds):
+        if n_flds_use > len_flds:
             break
 
     return result
 
 
-def make_condition(parameters, operator, prefix=''):
+def make_sql_condition(fld_vals, operator, prefix=''):
 
     cond_expressions = []
 
-    for k, v in parameters[:-1]:
+    for k, v in fld_vals[:-1]:
         cond_expressions.append(prefix + quote(k, "`") + " = " + _safe(v))
 
-    key, value = parameters[-1]
+    key, value = fld_vals[-1]
     cond_expressions.append(prefix + quote(key, "`") + operator + _safe(value))
 
     return " AND ".join(cond_expressions)
@@ -271,6 +274,7 @@ def quote(s, quote):
         s = s.replace(quote, "\\" + quote)
 
     return quote + s + quote
+
 
 def _safe(s):
     return '"' + MySQLdb.escape_string(s) + '"'
