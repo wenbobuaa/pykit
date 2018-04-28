@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+# !/usr/bin/env python2
 # coding: utf-8
 
 import time
@@ -104,13 +104,13 @@ class TestMysqlutil(unittest.TestCase):
         error_cases = (
             ([addr, table, result_fields, ['service', 'ip', '_id'], ['common0', '127.0.0.2']],
              {},
-             mysqlutil.IndexNotPairs,
+             mysqlutil.InvalidLength,
 
              'test index_fields amount greater than index_values',
              ),
             ([addr, table, result_fields, ['service', 'ip'], ['common0', '127.0.0.2', '13']],
              {},
-             mysqlutil.IndexNotPairs,
+             mysqlutil.InvalidLength,
 
              'test index_fields amount less than index_values',
              ),
@@ -130,7 +130,7 @@ class TestMysqlutil(unittest.TestCase):
             except error as e:
                 self.assertEqual(type(e), error)
 
-    def test_sql_scan_index(self):
+    def test_make_index_scan_sql(self):
 
         table = 'errlog'
 
@@ -138,61 +138,42 @@ class TestMysqlutil(unittest.TestCase):
             ([['_id'], ['service', 'ip', '_id'], ['common0', '127.0.0.1', '8']],
              {},
              'SELECT `_id` FROM `errlog` FORCE INDEX (`idx_service_ip__id`) '
-             'WHERE `errlog`.`service` = "common0" AND `errlog`.`ip` = "127.0.0.1" '
-             'AND `errlog`.`_id` >= "8" LIMIT 1024',
+             'WHERE `service` = "common0" AND `ip` = "127.0.0.1" AND `_id` >= "8" LIMIT 1024;',
 
              'test common',
             ),
             ([['_id', 'ip'], ['service', 'ip', '_id'], ['common0', '127.0.0.1', '8']],
              {'left_open': True},
              'SELECT `_id`, `ip` FROM `errlog` FORCE INDEX (`idx_service_ip__id`) '
-             'WHERE `errlog`.`service` = "common0" AND `errlog`.`ip` = "127.0.0.1" '
-             'AND `errlog`.`_id` > "8" LIMIT 1024',
+             'WHERE `service` = "common0" AND `ip` = "127.0.0.1" AND `_id` > "8" LIMIT 1024;',
 
              'test left_open',
             ),
-            ([[], ['service', 'ip', '_id'], ['common0', '127.0.0.1', '8']],
+            ([None, ['service', 'ip', '_id'], ['common0', '127.0.0.1', '8']],
              {'limit': 3},
              'SELECT * FROM `errlog` FORCE INDEX (`idx_service_ip__id`) '
-             'WHERE `errlog`.`service` = "common0" AND `errlog`.`ip` = "127.0.0.1" '
-             'AND `errlog`.`_id` >= "8" LIMIT 3',
+             'WHERE `service` = "common0" AND `ip` = "127.0.0.1" AND `_id` >= "8" LIMIT 3;',
 
              'test limit',
-            ),
-            ([['_id'], ['service', 'ip', '_id'], ['common0', '127.0.0.2']],
-             {},
-             'SELECT `_id` FROM `errlog` FORCE INDEX (`idx_service_ip__id`) '
-             'WHERE `errlog`.`service` = "common0" AND `errlog`.`ip` >= "127.0.0.2" LIMIT 1024',
-
-             'test index_fields amount greater than index_values',
-            ),
-            ([['_id'], ['service', 'ip'], ['common0', '127.0.0.2', '13']],
-             {},
-             'SELECT `_id` FROM `errlog` FORCE INDEX (`idx_service_ip`) '
-             'WHERE `errlog`.`service` = "common0" AND `errlog`.`ip` >= "127.0.0.2" LIMIT 1024',
-
-             'test index_fields amount less than index_values',
             ),
             ([['_id'], ['autolvl', 'service', 'ip', '_id'], ['stable', 'common0', '127.0.0.1', '8']],
              {'index_name': 'idx_service_ip__id'},
              'SELECT `_id` FROM `errlog` FORCE INDEX (`idx_service_ip__id`) '
-             'WHERE `errlog`.`autolvl` = "stable" AND `errlog`.`service` = "common0" '
-             'AND `errlog`.`ip` = "127.0.0.1" AND `errlog`.`_id` >= "8" LIMIT 1024',
+             'WHERE `autolvl` = "stable" AND `service` = "common0" AND `ip` = "127.0.0.1" '
+             'AND `_id` >= "8" LIMIT 1024;',
 
              'test index_name',
             ),
             ([['_id'], None, ['stable', 'common0', '127.0.0.1', '8']],
              {},
-             'SELECT `_id` FROM `errlog` '
-             'LIMIT 1024',
+             'SELECT `_id` FROM `errlog` LIMIT 1024;',
 
              'test blank index_fields',
             ),
             ([['_id'], ['service', 'ip', '_id'], ['common0', '127.0.0.1', '8']],
              {'left_open': True, 'limit': 5, 'index_name': 'idx_time__id'},
              'SELECT `_id` FROM `errlog` FORCE INDEX (`idx_time__id`) '
-             'WHERE `errlog`.`service` = "common0" AND `errlog`.`ip` = "127.0.0.1" '
-             'AND `errlog`.`_id` > "8" LIMIT 5',
+             'WHERE `service` = "common0" AND `ip` = "127.0.0.1" AND `_id` > "8" LIMIT 5;',
 
              'test all kwargs',
             ),
@@ -201,13 +182,13 @@ class TestMysqlutil(unittest.TestCase):
         for args, kwargs, rst_expect, msg in cases:
 
             dd('msg: ', msg)
+            dd('rst_expect: ', rst_expect)
 
             args = [table] + args
 
-            rst = mysqlutil.sql_scan_index(*args, **kwargs)
+            rst = mysqlutil.make_index_scan_sql(*args, **kwargs)
 
             dd('rst       : ', rst)
-            dd('rst_expect: ', rst_expect)
 
             self.assertEquals(rst, rst_expect)
 
@@ -496,6 +477,267 @@ class TestMysqlutil(unittest.TestCase):
         finally:
             stop_mysql_server()
 
+    def test_make_insert_sql(self):
+
+        cases = (
+            (
+                mysql_test_table,
+                ['common1', '127.0.0.3', '3'],
+                None,
+
+                'INSERT INTO `errlog` VALUES ("common1", "127.0.0.3", "3");',
+            ),
+
+            (
+                mysql_test_table,
+                ['common0', '127.0.0.4', '2'],
+                ['service', 'ip', '_id'],
+
+                'INSERT INTO `errlog` (`service`, `ip`, `_id`) '
+                'VALUES ("common0", "127.0.0.4", "2");',
+            ),
+
+            (
+                (mysql_test_db, mysql_test_table),
+                ['common2', '127.0.0.3', '4'],
+                None,
+
+                'INSERT INTO `test`.`errlog` VALUES ("common2", "127.0.0.3", "4");',
+            ),
+
+            (
+                (mysql_test_db, mysql_test_table),
+                ['common"三"', '127.0.0.3', '\\"4'],
+                None,
+
+                'INSERT INTO `test`.`errlog` VALUES ("common\\\"三\\\"", "127.0.0.3", "\\\\\\"4");',
+            ),
+        )
+
+        for table, values, fields, expected in cases:
+
+            dd('expected: ', expected)
+            rst = mysqlutil.make_insert_sql(table, values, fields)
+            dd('result:   ', rst)
+
+            self.assertEqual(expected, rst)
+
+    def test_make_select_sql(self):
+
+        cases = (
+            (
+                mysql_test_table,
+                ['_id'],
+                ['service', 'ip', '_id'],
+                ['common0', '127.0.0.1', '8'],
+                {},
+                'SELECT `_id` FROM `errlog` WHERE `service` = "common0" AND `ip` = "127.0.0.1" '
+                'AND `_id` = "8";',
+            ),
+
+            (
+                (mysql_test_db, mysql_test_table),
+                ['_id', 'ip'],
+                ['service', 'ip', '_id'],
+                ['common0', '127.0.0.1', '8'],
+                {
+                    'limit': 1024,
+                },
+
+                'SELECT `_id`, `ip` FROM `test`.`errlog` WHERE `service` = "common0" '
+                'AND `ip` = "127.0.0.1" AND `_id` = "8" LIMIT 1024;',
+            ),
+
+            (
+                mysql_test_table,
+                None,
+                ['service', 'ip', '_id'],
+                ['common0', '127.0.0.1', '8'],
+                {
+                    'limit': 3,
+                    'force_index': 'idx_service_ip__id',
+                },
+
+                'SELECT * FROM `errlog` FORCE INDEX (`idx_service_ip__id`) '
+                'WHERE `service` = "common0" AND `ip` = "127.0.0.1" AND `_id` = "8" LIMIT 3;',
+            ),
+
+            (
+                mysql_test_table,
+                ['_id'],
+                ['service', 'ip', '_id'],
+                ['common0', '127.0.0.1', '8'],
+                {
+                    'limit': 3,
+                    'force_index': 'idx_service_ip',
+                    'operator': '>=',
+                },
+
+                'SELECT `_id` FROM `errlog` FORCE INDEX (`idx_service_ip`) '
+                'WHERE `service` = "common0" AND `ip` = "127.0.0.1" AND `_id` >= "8" LIMIT 3;',
+            ),
+
+            (
+                mysql_test_table,
+                ['_id'],
+                None,
+                None,
+                {},
+
+                'SELECT `_id` FROM `errlog`;',
+            ),
+
+            (
+                mysql_test_table,
+                ['_id'],
+                ['service', 'ip', '_id'],
+                ['common"三"', '127.0.0.1', '\\\'8'],
+                {
+                    'limit': 3,
+                    'force_index': 'idx_service_ip',
+                    'operator': '>=',
+                },
+
+                'SELECT `_id` FROM `errlog` FORCE INDEX (`idx_service_ip`) '
+                'WHERE `service` = "common\\\"三\\\"" AND `ip` = "127.0.0.1" '
+                'AND `_id` >= "\\\\\\\'8" LIMIT 3;',
+            ),
+        )
+
+        for table, result_fields, index, index_values, kwargs, expected in cases:
+
+            dd('expected: ', expected)
+            rst = mysqlutil.make_select_sql(
+                table, result_fields, index, index_values, **kwargs)
+            dd('result:   ', rst)
+
+            self.assertEqual(expected, rst)
+
+    def test_make_update_sql(self):
+
+        cases = (
+            (
+                mysql_test_table,
+                {
+                    '_id': '0',
+                    'time': '042718',
+                },
+                ['service', 'ip', '_id'],
+                ['common0', '127.0.0.1', '8'],
+                {},
+                'UPDATE `errlog` SET `_id` = "0", `time` = "042718" '
+                'WHERE `service` = "common0" AND `ip` = "127.0.0.1" AND `_id` = "8";',
+            ),
+
+            (
+                (mysql_test_db, mysql_test_table),
+                {
+                    '_id': '0',
+                    'time': '042718',
+                },
+                ['service', 'ip', '_id'],
+                ['common0', '127.0.0.1', '8'],
+                {
+                    'limit': 1,
+                },
+                'UPDATE `test`.`errlog` SET `_id` = "0", `time` = "042718" '
+                'WHERE `service` = "common0" AND `ip` = "127.0.0.1" AND `_id` = "8" LIMIT 1;',
+            ),
+
+            (
+                (mysql_test_db, mysql_test_table),
+                {
+                    '_id': '0',
+                    'time': '042718',
+                },
+                None,
+                None,
+                {
+                    'limit': 1,
+                },
+                'UPDATE `test`.`errlog` SET `_id` = "0", `time` = "042718" LIMIT 1;',
+            ),
+
+            (
+                (mysql_test_db, mysql_test_table),
+                {
+                    '_id': '0',
+                    'time': '04\"27\'18',
+                },
+                ['service', 'ip', '_id'],
+                ['common"三"', '127.0.0.1', '8'],
+                {
+                    'limit': 1,
+                },
+                'UPDATE `test`.`errlog` SET `_id` = "0", `time` = "04\\\"27\\\'18" '
+                'WHERE `service` = "common\\\"三\\\"" AND `ip` = "127.0.0.1" AND `_id` = "8" LIMIT 1;',
+            ),
+        )
+
+        for table, values, index, index_values, kwargs, expected in cases:
+
+            dd('expected: ', expected)
+            rst = mysqlutil.make_update_sql(table, values, index, index_values, **kwargs)
+            dd('result:   ', rst)
+
+            self.assertEqual(expected, rst)
+
+    def test_make_delete_sql(self):
+
+        cases = (
+            (
+                mysql_test_table,
+                ['service', 'ip', '_id'],
+                ['common0', '127.0.0.1', '8'],
+                {},
+                'DELETE FROM `errlog` WHERE `service` = "common0" AND `ip` = "127.0.0.1" '
+                'AND `_id` = "8";',
+            ),
+
+            (
+                (mysql_test_db, mysql_test_table),
+                ['service', 'ip', '_id'],
+                ['common0', '127.0.0.1', '8'],
+                {
+                    'limit': 1,
+                },
+
+                'DELETE FROM `test`.`errlog` WHERE `service` = "common0" '
+                'AND `ip` = "127.0.0.1" AND `_id` = "8" LIMIT 1;',
+            ),
+
+            (
+                mysql_test_table,
+                None,
+                None,
+                {
+                    'limit': 1,
+                },
+
+                'DELETE FROM `errlog` LIMIT 1;',
+            ),
+
+            (
+                mysql_test_table,
+                ['service', 'ip', '_id'],
+                ['common"三"', '127.0.0.1', '\\\'8'],
+                {
+                    'limit': 1,
+                },
+
+                'DELETE FROM `errlog` '
+                'WHERE `service` = "common\\\"三\\\"" AND `ip` = "127.0.0.1" '
+                'AND `_id` = "\\\\\\\'8" LIMIT 1;',
+            ),
+        )
+
+        for table, index, index_values, kwargs, expected in cases:
+
+            dd('expected: ', expected)
+            rst = mysqlutil.make_delete_sql(table, index, index_values, **kwargs)
+            dd('result:   ', rst)
+
+            self.assertEqual(expected, rst)
 
 def docker_does_container_exist(name):
 

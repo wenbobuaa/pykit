@@ -4,12 +4,17 @@ from . import (
 
 from .mysqlutil import (
     ConnectionTypeError,
-    IndexNotPairs,
+    InvalidLength,
+
+    make_delete_sql,
+    make_index_scan_sql,
+    make_insert_sql,
     make_mysqldump_in_range,
+    make_select_sql,
     make_sharding,
     make_sql_condition_in_range,
+    make_update_sql,
     scan_index,
-    sql_scan_index,
 )
 
 from privilege import (
@@ -18,12 +23,17 @@ from privilege import (
 
 __all__ = [
     "ConnectionTypeError",
-    "IndexNotPairs",
+    "InvalidLength",
+
     "gtidset",
+    "make_delete_sql",
+    "make_index_scan_sql",
+    "make_insert_sql",
     "make_mysqldump_in_range",
+    "make_select_sql",
     "make_sharding",
     "make_sql_condition_in_range",
+    "make_update_sql",
     "privileges",
     "scan_index",
-    "sql_scan_index",
 ]

@@ -14,11 +14,7 @@ class ConnectionTypeError(Exception):
     pass
 
 
-class IndexNotPairs(Exception):
-    pass
-
-
-class InvalidShardLength(Exception):
+class InvalidLength(Exception):
     pass
 
 
@@ -34,7 +30,7 @@ def scan_index(connpool, table, result_fields, index_fields, index_values,
         raise ConnectionTypeError
 
     if len(index_values) != len(index_fields):
-        raise IndexNotPairs
+        raise InvalidLength('number of index fields and values are not equal')
 
     req_fields = list(index_fields)
     req_values = list(index_values)
@@ -45,7 +41,7 @@ def scan_index(connpool, table, result_fields, index_fields, index_values,
         limit = 1024
 
     while True:
-        sql = sql_scan_index(table, [], req_fields, req_values,
+        sql = make_index_scan_sql(table, None, req_fields, req_values,
                              left_open=left_open, limit=limit, index_name=index_name)
 
         rst = pool.query(sql, retry=retry)
@@ -74,53 +70,21 @@ def scan_index(connpool, table, result_fields, index_fields, index_values,
         break
 
 
-def sql_scan_index(table, result_fields, index_fields, index_values,
-                   left_open=False, limit=1024, index_name=None):
+def make_index_scan_sql(table, result_fields, index, index_values, left_open=False, limit=1024, index_name=None):
 
-    if isinstance(table, basestring):
-        table_name = quote(table, "`")
+    if left_open:
+        operator = '>'
     else:
-        db = quote(table[0], "`")
-        tbl = quote(table[1], "`")
-        table_name = db + '.' + tbl
+        operator = '>='
 
-    rst_flds = ', '.join([quote(x, "`") for x in result_fields])
-    if len(rst_flds) == 0:
-        rst_flds = '*'
-
-    if index_name is None and index_fields is not None:
-        index_name = 'idx_' + '_'.join(index_fields)
-
-    if index_name is None:
-        force_index = ''
+    if index_name is not None:
+        force_index = index_name
+    elif index is not None:
+        force_index = 'idx_' + '_'.join(index)
     else:
-        force_index = ' FORCE INDEX (' + quote(index_name, "`") + ')'
+        force_index = None
 
-    where_conditions = ''
-    if index_fields is not None:
-
-        index_pairs = zip(index_fields, index_values)
-
-        if left_open:
-            operator = ' > '
-        else:
-            operator = ' >= '
-
-        prefix = table_name + '.'
-        and_conditions = make_sql_condition(
-            index_pairs, operator, prefix=prefix)
-
-        where_conditions = ' WHERE ' + and_conditions
-
-    limit = int(limit)
-
-    sql_to_return = ('SELECT ' + rst_flds +
-                     ' FROM ' + table_name +
-                     force_index +
-                     where_conditions +
-                     ' LIMIT ' + str(limit))
-
-    return sql_to_return
+    return make_select_sql(table, result_fields, index, index_values, limit, force_index, operator)
 
 
 def make_mysqldump_in_range(fields, conn, table, path_dump_to, dump_exec, start, end=None):
@@ -162,15 +126,15 @@ def make_sql_condition_in_range(fields, start, end=None):
     fld_len = len(fields)
 
     if len(start) != fld_len:
-        raise InvalidShardLength(
-            "the number of fields in 'start' and 'shard_fields' is not equal")
+        raise InvalidLength(
+            "the number of fields in 'start' and 'fields' is not equal")
 
     if end is None:
         end = type(start)([None] * len(start))
 
     elif len(end) != fld_len:
-        raise InvalidShardLength(
-            "the number of fields in 'end' and 'shard_fields' is not equal")
+        raise InvalidLength(
+            "the number of fields in 'end' and 'fields' is not equal")
 
     elif start >= end:
         return []
@@ -255,17 +219,139 @@ def make_range_conditions(fld_ranges, left_close=True):
     return result
 
 
-def make_sql_condition(fld_vals, operator, prefix=''):
+def make_sql_condition(fld_vals, operator="=", callback=list):
 
     cond_expressions = []
 
     for k, v in fld_vals[:-1]:
-        cond_expressions.append(prefix + quote(k, "`") + " = " + _safe(v))
+        cond_expressions.append(quote(k, "`") + " = " + _safe(v))
 
     key, value = fld_vals[-1]
-    cond_expressions.append(prefix + quote(key, "`") + operator + _safe(value))
+    cond_expressions.append(quote(key, "`") + " " + operator + " " + _safe(value))
 
-    return " AND ".join(cond_expressions)
+    return callback(cond_expressions)
+
+
+def make_insert_sql(table, values, fields=None):
+
+    sql_pattern = "INSERT INTO {tb}{fld_clause} VALUES {val_clause};"
+
+    if isinstance(table, basestring):
+        tb = quote(table, '`')
+    else:
+        db = quote(table[0], '`')
+        table_name = quote(table[1], '`')
+        tb = db + '.' + table_name
+
+    if fields is not None:
+        fld_clause = ' ({flds})'.format(
+            flds=', '.join([quote(fld, "`") for fld in fields]))
+    else:
+        fld_clause = ''
+
+    val_clause = '({vals})'.format(vals=', '.join([_safe(val) for val in values]))
+
+    sql = sql_pattern.format(
+        tb=tb, fld_clause=fld_clause, val_clause=val_clause)
+
+    return sql
+
+
+def make_update_sql(table, values, index, index_values, limit=None):
+
+    sql_pattern = "UPDATE {tb} SET {set_clause}{where_clause}{limit_clause};"
+
+    if isinstance(table, basestring):
+        tb = quote(table, '`')
+    else:
+        db = quote(table[0], '`')
+        table_name = quote(table[1], '`')
+        tb = db + '.' + table_name
+
+    set_clause = make_sql_condition(values.items(), callback=', '.join)
+
+    if index is not None:
+        where_clause = ' WHERE {cond}'.format(
+            cond=make_sql_condition(zip(index, index_values), callback=' AND '.join))
+    else:
+        where_clause = ''
+
+    if limit is not None:
+        limit_clause = ' LIMIT {n}'.format(n=limit)
+    else:
+        limit_clause = ''
+
+    sql = sql_pattern.format(tb=tb, set_clause=set_clause, where_clause=where_clause,
+                             limit_clause=limit_clause)
+
+    return sql
+
+
+def make_delete_sql(table, index, index_values, limit=None):
+
+    sql_pattern = 'DELETE FROM {tb}{where_clause}{limit_clause};'
+
+    if isinstance(table, basestring):
+        tb = quote(table, '`')
+    else:
+        db = quote(table[0], '`')
+        table_name = quote(table[1], '`')
+        tb = db + '.' + table_name
+
+    if index is not None:
+        where_clause = ' WHERE {cond}'.format(
+            cond=make_sql_condition(zip(index, index_values), callback=' AND '.join))
+    else:
+        where_clause = ''
+
+    if limit is not None:
+        limit_clause = ' LIMIT {n}'.format(n=limit)
+    else:
+        limit_clause = ''
+
+    sql = sql_pattern.format(
+        tb=tb, where_clause=where_clause, limit_clause=limit_clause)
+
+    return sql
+
+
+def make_select_sql(table, result_fields, index, index_values,
+                        limit=None, force_index=None, operator='='):
+
+    sql_pattern = 'SELECT {rst} FROM {tb}{force_index}{where_clause}{limit_clause};'
+
+    if isinstance(table, basestring):
+        tb = quote(table, "`")
+    else:
+        db = quote(table[0], "`")
+        tbl = quote(table[1], "`")
+        tb = db + '.' + tbl
+
+    if result_fields is None:
+        rst_flds = '*'
+    else:
+        rst_flds = ', '.join([quote(x, "`") for x in result_fields])
+
+    if force_index is None:
+        index_fld = ''
+    else:
+        index_fld = ' FORCE INDEX (`{idx}`)'.format(idx=force_index)
+
+    if index is not None:
+        where_clause = ' WHERE {cond}'.format(
+            cond=make_sql_condition(zip(index, index_values), operator, callback=' AND '.join))
+    else:
+        where_clause = ''
+
+    if limit is not None:
+        limit_clause = ' LIMIT {n}'.format(n=limit)
+    else:
+        limit_clause = ''
+
+    sql = sql_pattern.format(rst=rst_flds, tb=tb, force_index=index_fld, where_clause=where_clause,
+                             limit_clause=limit_clause)
+
+    return sql
 
 
 def quote(s, quote):
