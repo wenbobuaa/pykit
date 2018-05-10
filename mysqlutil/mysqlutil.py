@@ -8,6 +8,7 @@ import urllib
 
 from pykit import dictutil
 from pykit import mysqlconnpool
+from pykit import strutil
 
 
 class ConnectionTypeError(Exception):
@@ -375,3 +376,45 @@ def make_where_clause(index, index_values, operator='='):
         where_clause = ''
 
     return where_clause
+
+
+def make_sharding(conf):
+
+    result = {
+        "shard": [],
+        "num": [],
+        "total": 0,
+    }
+
+    db = conf['db']
+    table = conf['table']
+    shard_fileds = conf['shard_fields']
+    start_shard = conf['start_shard']
+
+    # args = [(db, table), result_fields, index_fields, start_index_values]
+    args = [(db, table), shard_fileds, shard_fileds, start_shard]
+    kwargs = {"left_open": False, "use_dict": False, "retry": 3}
+
+    conn = conf['conn']
+    connpool = mysqlconnpool.make(conn)
+
+    records = scan_index(connpool, *args, **kwargs)
+
+    number_per_shard = conf['number_per_shard']
+    tolerance = conf['tolerance_of_shard']
+
+    shardings = strutil.sharding(
+        records, number_per_shard, accuracy=tolerance, joiner=list)
+
+    sharding_generator = conf.get('sharding_generator', tuple)
+    for shard, count in shardings:
+
+        if shard is not None:
+            result['shard'].append(sharding_generator(shard))
+        else:
+            result['shard'].append(sharding_generator(start_shard))
+
+        result['num'].append(count)
+        result['total'] += int(count)
+
+    return result
