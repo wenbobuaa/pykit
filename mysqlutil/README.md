@@ -16,6 +16,7 @@
   - [mysqlutil.make_index_scan_sql](#mysqlutilmake_index_scan_sql)
   - [mysqlutil.make_insert_sql](#mysqlutilmake_insert_sql)
   - [mysqlutil.make_select_sql](#mysqlutilmake_select_sql)
+  - [mysqlutil.make_sql_condition_in_range](#mysqlutilmake_sql_condition_in_range)
   - [mysqlutil.make_update_sql](#mysqlutilmake_update_sql)
   - [mysqlutil.scan_index](#mysqlutilscan_index)
 - [Author](#author)
@@ -349,6 +350,38 @@ make_select_sql('errlog', ['_id', 'key'], ('key', 'val'), ('a', 'b'),
 
 **return**:
 a string which is a sql select statement.
+
+
+## mysqlutil.make_sql_condition_in_range
+
+**syntax**:
+`mysqlutil.make_sql_condition_in_range(fields, start, end=None)`
+
+Generate sql conditions for those rows in the range of [`start`, `end`).
+If `end` is `None`, then no right boundary.
+
+```
+make_sql_condition_between_shards(
+    ["bucket_id", "scope", "key"], ("100000000", "a", "key_foo"), ("200000000", "a", "key_bar"))
+# ['`bucket_id` = "100000000" AND `scope` = "a" AND `key` >= "key_foo"',
+#  '`bucket_id` = "100000000" AND `scope` > "a"',
+#  '`bucket_id` > "100000000" AND `bucket_id` < "200000000",
+#  '`bucket_id` = "200000000" AND `scope` < "a"',
+#  '`bucket_id` = "200000000" AND `scope` = "a" AND `key` < "key_bar"',]
+```
+
+**argument**:
+
+-   `fields`:
+    is table fields to make the conditions. A list or tuple of string.
+-   `start`:
+    is the beginning boundary of the condition range, a list or tuple of string.
+-   `end`:
+    is the ending boundary of the condition range, a list or tuple of string. If `end` is `None`,
+    then condtion generated has no ending boundary.
+
+**return**:
+a list of string.
 
 
 ##  mysqlutil.make_update_sql
