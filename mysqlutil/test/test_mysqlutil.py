@@ -674,7 +674,7 @@ class TestMysqlutil(unittest.TestCase):
             'passwd': mysql_test_password,
         }
 
-        def sharding_generator(shard):
+        def shard_maker(shard):
 
             new_shard = [str(x) for x in shard]
             new_shard += ['', '', '']
@@ -685,10 +685,10 @@ class TestMysqlutil(unittest.TestCase):
             (
                 {
                     "shard_fields": ('service', 'ip', '_id'),
-                    "start_shard": ['common0', '', ''],
+                    "start": ['common0', '', ''],
                     "number_per_shard": 10,
                     "tolerance_of_shard": 1,
-                    "sharding_generator": tuple,
+                    "shard_maker": tuple,
                 },
                 {
                     'total': 32,
@@ -701,7 +701,7 @@ class TestMysqlutil(unittest.TestCase):
             (
                 {
                     "shard_fields": ('service', 'ip', '_id'),
-                    "start_shard": ['common0', '127.0.0.3', '27'],
+                    "start": ['common0', '127.0.0.3', '27'],
                     "number_per_shard": 10,
                     "tolerance_of_shard": 1,
                 },
@@ -716,10 +716,10 @@ class TestMysqlutil(unittest.TestCase):
             (
                 {
                     "shard_fields": ('service', 'ip', '_id'),
-                    "start_shard": ['common0', '', ''],
+                    "start": ['common0', '', ''],
                     "number_per_shard": 10,
                     "tolerance_of_shard": 1,
-                    "sharding_generator": sharding_generator,
+                    "shard_maker": shard_maker,
                 },
                 {
                     'total': 32,
@@ -732,10 +732,10 @@ class TestMysqlutil(unittest.TestCase):
             (
                 {
                     "shard_fields": ('service', 'ip', '_id'),
-                    "start_shard": ['common0', '', ''],
+                    "start": ['common0', '', ''],
                     "number_per_shard": 15,
                     "tolerance_of_shard": 2,
-                    "sharding_generator": sharding_generator,
+                    "shard_maker": shard_maker,
                 },
                 {
                     'total': 32,
@@ -747,7 +747,7 @@ class TestMysqlutil(unittest.TestCase):
             (
                 {
                     "shard_fields": ('time', '_id'),
-                    "start_shard": ['201706060600', '1'],
+                    "start": ['201706060600', '1'],
                     "number_per_shard": 10,
                     "tolerance_of_shard": 1,
                 },
