@@ -19,8 +19,8 @@ mysql_test_password = '123qwe'
 mysql_test_ip = '192.168.52.40'
 mysql_test_port = 3306
 mysql_test_user = 'root'
-mysql_test_name = 'mysql_test'
-mysql_test_tag = 'test-mysql:0.0.1'
+mysql_test_container = 'mysql_test'
+mysql_test_image = 'test-mysql:0.0.1'
 mysql_test_db = 'test'
 mysql_test_table = 'errlog'
 
@@ -33,7 +33,7 @@ class TestMysqlScanIndex(unittest.TestCase):
 
         docker_file_dir = os.path.abspath(os.path.dirname(__file__)) + '/dep'
 
-        utdocker.build_image(mysql_test_tag, docker_file_dir)
+        utdocker.build_image(mysql_test_image, docker_file_dir)
 
 
     def setUp(self):
@@ -41,8 +41,8 @@ class TestMysqlScanIndex(unittest.TestCase):
         utdocker.create_network()
 
         utdocker.start_container(
-            mysql_test_name,
-            mysql_test_tag,
+            mysql_test_container,
+            mysql_test_image,
             ip=mysql_test_ip,
             env={
                 'MYSQL_ROOT_PASSWORD': mysql_test_password,
@@ -52,7 +52,7 @@ class TestMysqlScanIndex(unittest.TestCase):
         ututil.wait_listening(mysql_test_ip, mysql_test_port)
 
     def tearDown(self):
-        utdocker.remove_container(mysql_test_name)
+        utdocker.remove_container(mysql_test_container)
 
     def test_scan_index(self):
 
@@ -154,6 +154,113 @@ class TestMysqlScanIndex(unittest.TestCase):
                 rst = mysqlutil.scan_index(*args, **kwargs)
             except error as e:
                 self.assertEqual(type(e), error)
+
+    def test_make_sharding(self):
+
+        db = mysql_test_db
+        table = mysql_test_table
+        conn = {
+            'host': mysql_test_ip,
+            'port': mysql_test_port,
+            'user': mysql_test_user,
+            'passwd': mysql_test_password,
+        }
+
+        def shard_maker(shard):
+
+            new_shard = [str(x) for x in shard]
+            new_shard += ['', '', '']
+
+            return tuple(new_shard[:3])
+
+        cases = (
+            (
+                {
+                    "shard_fields": ('service', 'ip', '_id'),
+                    "start": ['common0', '', ''],
+                    "number_per_shard": 10,
+                    "tolerance_of_shard": 1,
+                    "shard_maker": tuple,
+                },
+                {
+                    'total': 32,
+                    'num': [10, 10, 10, 2],
+                    'shard': [('common0', '', ''), ('common0', '127.0.0.3', 27L),
+                              ('common2', '127.0.0.1'), ('common4', '127.0.0.1', 7L)],
+                },
+            ),
+
+            (
+                {
+                    "shard_fields": ('service', 'ip', '_id'),
+                    "start": ['common0', '127.0.0.3', '27'],
+                    "number_per_shard": 10,
+                    "tolerance_of_shard": 1,
+                },
+                {
+                    'total': 22,
+                    'num': [10, 10, 2],
+                    'shard': [['common0', '127.0.0.3', '27'],
+                              ['common2', '127.0.0.1'], ['common4', '127.0.0.1', 7L]],
+                },
+            ),
+
+            (
+                {
+                    "shard_fields": ('service', 'ip', '_id'),
+                    "start": ['common0', '', ''],
+                    "number_per_shard": 10,
+                    "tolerance_of_shard": 1,
+                    "shard_maker": shard_maker,
+                },
+                {
+                    'total': 32,
+                    'num': [10, 10, 10, 2],
+                    'shard': [('common0', '', ''), ('common0', '127.0.0.3', '27'),
+                              ('common2', '127.0.0.1', ''), ('common4', '127.0.0.1', '7')],
+                },
+            ),
+
+            (
+                {
+                    "shard_fields": ('service', 'ip', '_id'),
+                    "start": ['common0', '', ''],
+                    "number_per_shard": 15,
+                    "tolerance_of_shard": 2,
+                    "shard_maker": shard_maker,
+                },
+                {
+                    'total': 32,
+                    'num': [15, 15, 2],
+                    'shard': [('common0', '', ''), ('common1', '127.0.0.1', '31'), ('common4', '', '')],
+                },
+            ),
+
+            (
+                {
+                    "shard_fields": ('time', '_id'),
+                    "start": ['201706060600', '1'],
+                    "number_per_shard": 10,
+                    "tolerance_of_shard": 1,
+                },
+                {
+                    'total': 32,
+                    'num': [10, 10, 10, 2],
+                    'shard': [['201706060600', '1'], [201706060610L,], [201706060620L,],
+                              [201706060630L,]],
+                },
+            ),
+        )
+
+        for conf, expected in cases:
+
+            conf['db'] = db
+            conf['table'] = table
+            conf['conn'] = conn
+            dd('expected: ', expected)
+            result = mysqlutil.make_sharding(conf)
+            dd('result  : ', result)
+            self.assertEqual(result, expected)
 
 
 class TestMysqlutil(unittest.TestCase):
@@ -660,168 +767,3 @@ class TestMysqlutil(unittest.TestCase):
             dd('rst     : ', rst)
 
             self.assertEquals(rst_expected, rst)
-
-    def test_make_sharding(self):
-
-        mysql_ip = start_mysql_server()
-
-        db = mysql_test_db
-        table = mysql_test_table
-        conn = {
-            'host': mysql_ip,
-            'port': mysql_test_port,
-            'user': mysql_test_user,
-            'passwd': mysql_test_password,
-        }
-
-        def shard_maker(shard):
-
-            new_shard = [str(x) for x in shard]
-            new_shard += ['', '', '']
-
-            return tuple(new_shard[:3])
-
-        cases = (
-            (
-                {
-                    "shard_fields": ('service', 'ip', '_id'),
-                    "start": ['common0', '', ''],
-                    "number_per_shard": 10,
-                    "tolerance_of_shard": 1,
-                    "shard_maker": tuple,
-                },
-                {
-                    'total': 32,
-                    'num': [10, 10, 10, 2],
-                    'shard': [('common0', '', ''), ('common0', '127.0.0.3', 27L),
-                              ('common2', '127.0.0.1'), ('common4', '127.0.0.1', 7L)],
-                },
-            ),
-
-            (
-                {
-                    "shard_fields": ('service', 'ip', '_id'),
-                    "start": ['common0', '127.0.0.3', '27'],
-                    "number_per_shard": 10,
-                    "tolerance_of_shard": 1,
-                },
-                {
-                    'total': 22,
-                    'num': [10, 10, 2],
-                    'shard': [['common0', '127.0.0.3', '27'],
-                              ['common2', '127.0.0.1'], ['common4', '127.0.0.1', 7L]],
-                },
-            ),
-
-            (
-                {
-                    "shard_fields": ('service', 'ip', '_id'),
-                    "start": ['common0', '', ''],
-                    "number_per_shard": 10,
-                    "tolerance_of_shard": 1,
-                    "shard_maker": shard_maker,
-                },
-                {
-                    'total': 32,
-                    'num': [10, 10, 10, 2],
-                    'shard': [('common0', '', ''), ('common0', '127.0.0.3', '27'),
-                              ('common2', '127.0.0.1', ''), ('common4', '127.0.0.1', '7')],
-                },
-            ),
-
-            (
-                {
-                    "shard_fields": ('service', 'ip', '_id'),
-                    "start": ['common0', '', ''],
-                    "number_per_shard": 15,
-                    "tolerance_of_shard": 2,
-                    "shard_maker": shard_maker,
-                },
-                {
-                    'total': 32,
-                    'num': [15, 15, 2],
-                    'shard': [('common0', '', ''), ('common1', '127.0.0.1', '31'), ('common4', '', '')],
-                },
-            ),
-
-            (
-                {
-                    "shard_fields": ('time', '_id'),
-                    "start": ['201706060600', '1'],
-                    "number_per_shard": 10,
-                    "tolerance_of_shard": 1,
-                },
-                {
-                    'total': 32,
-                    'num': [10, 10, 10, 2],
-                    'shard': [['201706060600', '1'], [201706060610L,], [201706060620L,],
-                              [201706060630L,]],
-                },
-            ),
-        )
-
-        try:
-            for conf, expected in cases:
-
-                conf['db'] = db
-                conf['table'] = table
-                conf['conn'] = conn
-                dd('expected: ', expected)
-                result = mysqlutil.make_sharding(conf)
-                dd('result  : ', result)
-                self.assertEqual(result, expected)
-        finally:
-            stop_mysql_server()
-
-def docker_does_container_exist(name):
-
-    dcli = _docker_cli()
-    try:
-        dcli.inspect_container(name)
-        return True
-    except docker.errors.NotFound:
-        return False
-
-def _docker_cli():
-    dcli = docker.Client(base_url='unix://var/run/docker.sock')
-    return dcli
-
-def start_mysql_server():
-
-    # create docker image by run mysqlutil/test/dep/build_img.sh before test
-    if not docker_does_container_exist(mysql_test_name):
-
-        dd('create container: ' + mysql_test_name)
-        dcli = _docker_cli()
-        dcli.create_container(name=mysql_test_name,
-                              environment={
-                                  'MYSQL_ROOT_PASSWORD': mysql_test_password,
-                              },
-                              image=mysql_test_tag,
-                              )
-        time.sleep(2)
-
-    dd('start mysql: ' + mysql_test_name)
-    dcli = _docker_cli()
-    dcli.start(container=mysql_test_name)
-
-    dd('get mysql ip inside container')
-    rc, out, err = proc.command(
-        'docker',
-        'run',
-        '-i',
-        '--link', mysql_test_name + ':mysql',
-        '--rm', mysql_test_tag,
-        'sh', '-c', 'exec echo "$MYSQL_PORT_3306_TCP_ADDR"',
-    )
-
-    ip = out.strip()
-    dd('ip: ' + repr(ip))
-
-    return ip
-
-def stop_mysql_server():
-
-    # remove docker image by run mysqlutil/test/dep/rm_imd.sh after test
-    dcli = _docker_cli()
-    dcli.stop(container=mysql_test_name)
