@@ -441,34 +441,32 @@ Return sharding result as a dictionary like:
 
 **argument**:
 
--   `conf`:
-    is a dictionary which provides configuration for sharding. Fields like:
+-   `db`: which database to sharding. A string.
+-   `table`: which table to sharding. A string.
+-   `conn`: database connect info:
 
-    -   `db`: which database to sharding. A string.
-    -   `table`: which table to sharding. A string.
-    -   `conn`: database connect info:
+    ```
+    {
+        'host': '127.0.0.1',
+        'port': 3306,
+        'user': 'mysql',
+        'passwd': 'password',
+    }
+    ```
 
-        ```
-        {
-            'host': '127.0.0.1',
-            'port': 3306,
-            'user': 'mysql',
-            'passwd': '123qwe',
-        }
-        ```
+-   `shard_fields`: are index fields to sharding by, a list or tuple of strings.
+-   `start`: is the start condition to scan table, a list or tuple of strings.
+-   `number_per_shard`: specifies the number of rows a shard contains, an integer.
+-   `tolerance_of_shard`: the tolerance of one shard's capacity, an integer.
+-   `shard_maker`: a function which accepts one list of strings argument and return a value as
+    a "shard" in the result. For example:
 
-    -   `shard_fields`: are index fields to sharding by, a list or tuple of strings.
-    -   `start`: is the start condition to scan table, a list or tuple of strings.
-    -   `number_per_shard`: specifies the number of rows a shard contains, an integer.
-    -   `tolerance_of_shard`: the tolerance of one shard's capacity, an integer.
-    -   `shard_maker`: a function which accepts one list of strings argument and return a value as
-        a "shard" in the result. For example:
-
-        ```
-        def shard_maker(shard):
-            new_shard = shard + ['']*3
-            return new_shard[:3]
-        ```
+    ```
+    def shard_maker(shard):
+        new_shard = shard + ['']*3
+        return new_shard[:3]
+    ```
+    By default, it is `list`.
 
 **return**:
 a dictionary of sharding result, like:

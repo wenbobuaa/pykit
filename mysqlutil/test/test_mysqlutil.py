@@ -148,7 +148,7 @@ class TestMysqlScanIndex(base.Base):
                 },
                 {
                     'total': 32,
-                    'num': [10, 10, 10, 2],
+                    'number': [10, 10, 10, 2],
                     'shard': [('common0', '', ''), ('common0', '127.0.0.3', 27L),
                               ('common2', '127.0.0.1'), ('common4', '127.0.0.1', 7L)],
                 },
@@ -163,7 +163,7 @@ class TestMysqlScanIndex(base.Base):
                 },
                 {
                     'total': 22,
-                    'num': [10, 10, 2],
+                    'number': [10, 10, 2],
                     'shard': [['common0', '127.0.0.3', '27'],
                               ['common2', '127.0.0.1'], ['common4', '127.0.0.1', 7L]],
                 },
@@ -179,7 +179,7 @@ class TestMysqlScanIndex(base.Base):
                 },
                 {
                     'total': 32,
-                    'num': [10, 10, 10, 2],
+                    'number': [10, 10, 10, 2],
                     'shard': [('common0', '', ''), ('common0', '127.0.0.3', '27'),
                               ('common2', '127.0.0.1', ''), ('common4', '127.0.0.1', '7')],
                 },
@@ -195,7 +195,7 @@ class TestMysqlScanIndex(base.Base):
                 },
                 {
                     'total': 32,
-                    'num': [15, 15, 2],
+                    'number': [15, 15, 2],
                     'shard': [('common0', '', ''), ('common1', '127.0.0.1', '31'), ('common4', '', '')],
                 },
             ),
@@ -209,20 +209,21 @@ class TestMysqlScanIndex(base.Base):
                 },
                 {
                     'total': 32,
-                    'num': [10, 10, 10, 2],
+                    'number': [10, 10, 10, 2],
                     'shard': [['201706060600', '1'], [201706060610L,], [201706060620L,],
                               [201706060630L,]],
                 },
             ),
         )
 
-        for conf, expected in cases:
+        for kwargs, expected in cases:
 
-            conf['db'] = db
-            conf['table'] = table
-            conf['conn'] = conn
+            kwargs['db'] = db
+            kwargs['table'] = table
+            kwargs['conn'] = conn
+
             dd('expected: ', expected)
-            result = mysqlutil.make_sharding(conf)
+            result = mysqlutil.make_sharding(**kwargs)
             dd('result  : ', result)
             self.assertEqual(result, expected)
 
